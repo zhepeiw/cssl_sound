@@ -1,0 +1,148 @@
+# File              : sup_train.yaml
+# Author            : Zhepei Wang <zhepeiw2@illinois.edu>
+# Date              : 27.01.2022
+# Last Modified Date: 27.01.2022
+# Last Modified By  : Zhepei Wang <zhepeiw2@illinois.edu>
+
+
+seed: 1234
+__set_seed: !apply:torch.manual_seed [!ref <seed>]
+
+time_stamp: placeholder
+
+# cont learning setup
+# task_classes:
+#   - !tuple (0, 1)
+#   - !tuple (2, 3)
+#   - !tuple (4, 5)
+#   - !tuple (6, 7)
+#   - !tuple (8, 9)
+task_classes:
+    - !tuple (0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+
+# Training parameters
+number_of_epochs: 25
+batch_size: 32
+lr: 0.001
+base_lr: 0.00000001
+max_lr: !ref <lr>
+step_size: 65000
+sample_rate: 16000
+train_duration: 4.0
+
+# dataset
+data_folder: "/mnt/data/Sound Sets/UrbanSound8K/UrbanSound8K"
+train_folds: [1, 2, 3, 4, 5, 6, 7, 8]
+valid_folds: [9]
+test_folds: [10]
+label_encoder_path: "./dataset/label_encoder.txt"
+
+train_dataloader_opts:
+  batch_size: !ref <batch_size>
+  num_workers: 8
+  shuffle: True
+  # drop_last: True
+
+valid_dataloader_opts:
+  batch_size: 32
+  num_workers: 8
+
+
+experiment_name: supervise
+# output_folder: !ref results/<experiment_name>/<seed>
+output_folder: !ref /mnt/data/zhepei/outputs/cssl_sound/results/<time_stamp>_seed_<seed>+<experiment_name>
+train_log: !ref <output_folder>/train_log.txt
+save_folder: !ref <output_folder>/save
+
+# Experiment params
+auto_mix_prec: True # Set it to True for mixed precision
+
+
+# Feature parameters
+n_mels: 80
+left_frames: 0
+right_frames: 0
+deltas: False
+amp_to_db: False
+normalize: True
+# Number of classes
+n_classes: 10
+emb_dim: 192
+
+# Functions
+compute_features: !new:speechbrain.lobes.features.Fbank
+    n_mels: !ref <n_mels>
+    left_frames: !ref <left_frames>
+    right_frames: !ref <right_frames>
+    deltas: !ref <deltas>
+
+mean_var_norm: !new:speechbrain.processing.features.InputNormalization
+    norm_type: sentence
+    std_norm: False
+
+embedding_model: !new:speechbrain.lobes.models.ECAPA_TDNN.ECAPA_TDNN
+    input_size: !ref <n_mels>
+    channels: [1024, 1024, 1024, 1024, 3072]
+    kernel_sizes: [5, 3, 3, 3, 1]
+    dilations: [1, 2, 3, 4, 1]
+    attention_channels: 128
+    lin_neurons: !ref <emb_dim>
+
+classifier: !new:speechbrain.lobes.models.ECAPA_TDNN.Classifier
+    input_size: !ref <emb_dim>
+    out_neurons: !ref <n_classes>
+
+modules:
+    compute_features: !ref <compute_features>
+    embedding_model: !ref <embedding_model>
+    classifier: !ref <classifier>
+    mean_var_norm: !ref <mean_var_norm>
+
+compute_cost: !new:speechbrain.nnet.losses.LogSoftmaxWrapper
+    # loss_fn: !new:torch.nn.Identity
+    loss_fn: !new:speechbrain.nnet.losses.AdditiveAngularMargin
+        margin: 0.2
+        scale: 30
+
+acc_metric: !name:speechbrain.utils.Accuracy.AccuracyStats
+
+opt_class: !name:torch.optim.Adam
+    lr: !ref <lr>
+    weight_decay: 0.000002
+
+lr_scheduler: !new:speechbrain.nnet.schedulers.CyclicLRScheduler
+    base_lr: !ref <base_lr>
+    max_lr: !ref <max_lr>
+    step_size: !ref <step_size>
+
+epoch_counter: !new:speechbrain.utils.epoch_loop.EpochCounter
+    limit: !ref <number_of_epochs>
+
+datapoint_counter: !new:utils.DatapointCounter
+      
+# Logging + checkpoints
+checkpointer: !new:speechbrain.utils.checkpoints.Checkpointer
+    checkpoints_dir: !ref <save_folder>
+    recoverables:
+        embedding_model: !ref <embedding_model>
+        classifier: !ref <classifier>
+        normalizer: !ref <mean_var_norm>
+        counter: !ref <epoch_counter>
+        datapoint_counter: !ref <datapoint_counter>
+
+train_logger: !new:speechbrain.utils.train_logger.FileTrainLogger
+    save_file: !ref <train_log>
+
+# wandb
+use_wandb: False
+train_log_frequency: 20
+wandb_logger_fn: !name:utils.MyWandBLogger
+    initializer: !name:wandb.init
+    entity: CAL
+    project: cssl_sound
+    name: !ref <time_stamp>+seed_<seed>+<experiment_name>
+    dir: !ref <output_folder>
+    reinit: True
+    yaml_config: hparams/sup_train.yaml
+    resume: False
+
