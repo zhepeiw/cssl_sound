@@ -283,7 +283,7 @@ class SupSoundClassifier(sb.core.Brain):
                     })
                 self.hparams.train_logger.log_stats(
                     stats_meta={
-                        "datapoints_seen": self.hparams.datapoint_counter.current,
+                        "Epoch loaded": self.hparams.epoch_counter.current,
                     },
                     test_stats=test_stats
                 )
