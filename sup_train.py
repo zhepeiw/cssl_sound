@@ -339,6 +339,7 @@ class SupSoundClassifier(sb.core.Brain):
             task_acc = np.sum(np.diag(task_confusion_matrix)) / (np.sum(task_confusion_matrix) + 1e-8)
             summary['cmat'].append(task_confusion_matrix)
             summary['acc'].append(task_acc)
+        test_stats = {'avg task acc': np.mean(summary['acc'])}
         if self.hparams.use_wandb:
             import matplotlib.pyplot as plt
             acc_fig = plt.figure()
@@ -353,11 +354,12 @@ class SupSoundClassifier(sb.core.Brain):
             ax.set_ylabel("Accuracy", fontsize=18)
             ax.yaxis.set_label_position("left")
             ax.yaxis.tick_left()
+            test_stats.update({'Test Accuracies': wandb.Image(acc_fig)})
             self.hparams.train_logger.log_stats(
                 stats_meta={
                     "Epoch loaded": self.hparams.epoch_counter.current,
                 },
-                test_stats={'Task Accuracies': wandb.Image(acc_fig)}
+                test_stats=test_stats,
             )
         else:
             self.hparams.train_logger.log_stats(
@@ -367,7 +369,7 @@ class SupSoundClassifier(sb.core.Brain):
                         summary['acc']
                     ),
                 },
-                test_stats={'avg task acc': np.mean(summary['acc'])},
+                test_stats=test_stats,
             )
         return summary
 
