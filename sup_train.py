@@ -306,6 +306,8 @@ class SupSoundClassifier(sb.core.Brain):
         min_key=None,
         test_loader_kwargs={},
     ):
+        # do not reduce step counter for logging purposes
+        self.checkpointer.recoverables.pop('datapoint_counter')
         self.on_evaluate_start(max_key=max_key, min_key=min_key)
         self.modules.eval()
         summary = {
@@ -340,8 +342,10 @@ class SupSoundClassifier(sb.core.Brain):
             summary['cmat'].append(task_confusion_matrix)
             summary['acc'].append(task_acc)
         test_stats = {'avg task acc': np.mean(summary['acc'])}
+        # wandb logger
         if self.hparams.use_wandb:
             import matplotlib.pyplot as plt
+            # bar plot of task-wise accuracy
             acc_fig = plt.figure()
             ax = acc_fig.add_subplot(1, 1, 1)
             tickmarks = np.arange(len(summary['acc']))
@@ -350,11 +354,18 @@ class SupSoundClassifier(sb.core.Brain):
             ax.set_xticks(tickmarks)
             ax.xaxis.set_label_position("bottom")
             ax.xaxis.tick_bottom()
-
             ax.set_ylabel("Accuracy", fontsize=18)
             ax.yaxis.set_label_position("left")
             ax.yaxis.tick_left()
             test_stats.update({'Test Accuracies': wandb.Image(acc_fig)})
+            # confusion matrix for all tasks combined
+            cm_fig = create_cm_fig(
+                np.sum(np.array(summary['cmat']), axis=0),
+                display_labels=list(
+                        self.hparams.label_encoder.ind2lab.values()
+                    ),
+            )
+            test_stats.update({'Confusion All': wandb.Image(cm_fig)})
             self.hparams.train_logger.log_stats(
                 stats_meta={
                     "Epoch loaded": self.hparams.epoch_counter.current,
@@ -488,14 +499,8 @@ if __name__ == "__main__":
     for task_idx in range(start_task, num_tasks):
         print("==> Starting task {}/{}".format(task_idx+1, num_tasks))
         if not hparams['resume_interrupt']:
-            # restore from previous best
-            if isinstance(hparams['prev_checkpointer'], sb.utils.checkpoints.Checkpointer):
-                hparams['prev_checkpointer'].recover_if_possible(
-                    max_key='acc',
-                    device=brain.device if brain is not None else None,
-                )
-                print("==> Restoring from previous checkpointer at {}".format(hparams['prev_checkpointer'].checkpoints_dir))
             # reset epoch counter and lr scheduler
+            # weights should be restored already in on_evaluate_start()
             hparams['recoverables']['lr_scheduler'] = \
                     hparams['lr_scheduler'] = hparams['lr_scheduler_fn']()
             hparams['recoverables']['epoch_counter'] = \
@@ -527,6 +532,7 @@ if __name__ == "__main__":
                 if os.path.exists(buffer_cl_acc_table_path):
                     cl_acc_table = torch.load(buffer_cl_acc_table_path)
             print("==> Resuming from interrupted checkpointer at {}".format(hparams['checkpointer'].checkpoints_dir))
+            hparams['resume_interrupt'] = False
 
         # TODO: generate task-wise data
         train_data = dataio_prep(
@@ -556,37 +562,39 @@ if __name__ == "__main__":
             valid_loader_kwargs=hparams["valid_dataloader_opts"],
         )
 
-        #  # Load the best checkpoint for evaluation
-        #  test_stats = brain.evaluate(
-        #      test_set=test_datasets[0],
-        #      max_key="acc",
-        #      progressbar=True,
-        #      test_loader_kwargs=hparams["valid_dataloader_opts"],
-        #  )
+        # Load the best checkpoint for evaluation
+        if num_tasks == 1:
+            test_stats = brain.evaluate(
+                test_set=test_datasets[0],
+                max_key="acc",
+                progressbar=True,
+                test_loader_kwargs=hparams["valid_dataloader_opts"],
+            )
 
-        # multitask evaluation
-        test_stats = brain.evaluate_multitask(
-            test_datasets,
-            max_key='acc',
-            test_loader_kwargs=hparams['valid_dataloader_opts']
-        )
-        cl_acc_table[task_idx] = test_stats['acc']
-        # global buffer
-        torch.save(
-            test_stats,
-            os.path.join(
-                hparams['checkpointer'].checkpoints_dir,
-                'test_stats.pt'
+        else:
+            # multitask evaluation
+            test_stats = brain.evaluate_multitask(
+                test_datasets,
+                max_key='acc',
+                test_loader_kwargs=hparams['valid_dataloader_opts']
             )
-        )
-        torch.save(
-            cl_acc_table,
-            os.path.join(
-                hparams['save_folder'],
-                'task{}'.format(task_idx),
-                'cl_acc_table.pt'
+            cl_acc_table[task_idx] = test_stats['acc']
+            # global buffer
+            torch.save(
+                test_stats,
+                os.path.join(
+                    hparams['checkpointer'].checkpoints_dir,
+                    'test_stats.pt'
+                )
             )
-        )
-        print("\n {} \n".format(cl_acc_table))
+            torch.save(
+                cl_acc_table,
+                os.path.join(
+                    hparams['save_folder'],
+                    'task{}'.format(task_idx),
+                    'cl_acc_table.pt'
+                )
+            )
+            print("\n {} \n".format(cl_acc_table))
 
         hparams['prev_checkpointer'] = hparams['checkpointer']
