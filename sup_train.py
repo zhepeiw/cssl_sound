@@ -572,13 +572,13 @@ if __name__ == "__main__":
             )
 
         else:
-            # multitask evaluation
+            # multitask evaluation up to the current task
             test_stats = brain.evaluate_multitask(
-                test_datasets,
+                test_datasets[:task_idx+1],
                 max_key='acc',
                 test_loader_kwargs=hparams['valid_dataloader_opts']
             )
-            cl_acc_table[task_idx] = test_stats['acc']
+            cl_acc_table[task_idx, :task_idx+1] = test_stats['acc']
             # global buffer
             torch.save(
                 test_stats,
