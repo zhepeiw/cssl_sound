@@ -15,6 +15,7 @@ from sklearn.metrics import confusion_matrix
 import numpy as np
 import wandb
 from confusion_matrix_fig import create_cm_fig
+from dataset.cl_pipeline import prepare_task_csv_from_replay
 
 import pdb
 
@@ -488,13 +489,13 @@ if __name__ == "__main__":
     class_labels = list(label_encoder.ind2lab.values())
     print("Class Labels:", class_labels)
 
-
-    # continual learning starts here
     num_tasks = len(hparams['task_classes'])
     brain = None
     test_datasets = [dataio_prep(hparams, os.path.join(hparams['save_folder'], 'test_task{}_raw.csv'.format(tt)), label_encoder) for tt in range(num_tasks)]
-    # CL metrics
+    # all buffers
+    replay = {'train': [], 'valid': []}
     cl_acc_table = np.zeros((num_tasks, num_tasks))
+    # CL starts here
     start_task = 0 if not hparams['resume_interrupt'] else hparams['resume_task_idx']
     for task_idx in range(start_task, num_tasks):
         print("==> Starting task {}/{}".format(task_idx+1, num_tasks))
@@ -531,20 +532,39 @@ if __name__ == "__main__":
                 )
                 if os.path.exists(buffer_cl_acc_table_path):
                     cl_acc_table = torch.load(buffer_cl_acc_table_path)
+                replay_path = os.path.join(
+                    hparams['save_folder'],
+                    'task{}'.format(task_idx-1),
+                    'replay.pt'
+                )
+                if os.path.exists(replay_path):
+                    replay = torch.load(replay_path)
             print("==> Resuming from interrupted checkpointer at {}".format(hparams['checkpointer'].checkpoints_dir))
             hparams['resume_interrupt'] = False
 
         # TODO: generate task-wise data
+        curr_train_replay = prepare_task_csv_from_replay(
+            os.path.join(hparams['save_folder'], 'train_task{}_raw.csv'.format(task_idx)),
+            replay['train'],
+            hparams['replay_num_keep'],
+        )
+        replay['train'] += curr_train_replay
         train_data = dataio_prep(
             hparams,
-            os.path.join(hparams['save_folder'], 'train_task{}_raw.csv'.format(task_idx)),
+            os.path.join(hparams['save_folder'], 'train_task{}_replay.csv'.format(task_idx)),
             label_encoder,
+        )
+        curr_valid_replay = prepare_task_csv_from_replay(
+            os.path.join(hparams['save_folder'], 'valid_task{}_raw.csv'.format(task_idx)),
+            replay['valid'],
+            hparams['replay_num_keep'],
         )
         valid_data = dataio_prep(
             hparams,
-            os.path.join(hparams['save_folder'], 'valid_task{}_raw.csv'.format(task_idx)),
+            os.path.join(hparams['save_folder'], 'valid_task{}_replay.csv'.format(task_idx)),
             label_encoder,
         )
+        replay['valid'] += curr_valid_replay
 
         brain = SupSoundClassifier(
             modules=hparams["modules"],
@@ -596,5 +616,13 @@ if __name__ == "__main__":
                 )
             )
             print("\n {} \n".format(cl_acc_table))
+            torch.save(
+                replay,
+                os.path.join(
+                    hparams['save_folder'],
+                    'task{}'.format(task_idx),
+                    'replay.pt'
+                )
+            )
 
         hparams['prev_checkpointer'] = hparams['checkpointer']
