@@ -2,6 +2,7 @@ import os
 import sys
 import numpy as np
 import torch
+import torch.nn.functional as F
 import torchaudio
 from hyperpyyaml import load_hyperpyyaml
 import logging
@@ -15,7 +16,10 @@ from sklearn.metrics import confusion_matrix
 import numpy as np
 import wandb
 from confusion_matrix_fig import create_cm_fig
-from dataset.cl_pipeline import prepare_task_csv_from_replay
+from dataset.cl_pipeline import (
+    prepare_task_csv_from_replay,
+    mixup_dataio_prep,
+)
 
 import pdb
 
@@ -28,11 +32,16 @@ class SupSoundClassifier(sb.core.Brain):
         batch = batch.to(self.device)
         wavs, lens = batch.sig
 
+        feats = self.prepare_features(wavs, lens, stage)
+        # Embeddings + sound classifier
+        embeddings = self.modules.embedding_model(feats)
+        outputs = self.modules.classifier(embeddings)
+
+        return outputs, lens
+
+    def prepare_features(self, wavs, lens, stage):
         # TODO: augmentation
-
-        # Feature extraction and normalization
         feats = self.modules.compute_features(wavs)
-
         if self.hparams.amp_to_db:
             Amp2db = torchaudio.transforms.AmplitudeToDB(
                 stype="power", top_db=80
@@ -43,23 +52,24 @@ class SupSoundClassifier(sb.core.Brain):
         if self.hparams.normalize:
             feats = self.modules.mean_var_norm(feats, lens)
 
-        # Embeddings + sound classifier
-        embeddings = self.modules.embedding_model(feats)
-        outputs = self.modules.classifier(embeddings)
-
-        return outputs, lens
+        return feats
 
     def compute_objectives(self, predictions, batch, stage):
         predictions, lens = predictions  # [bs, 1, C]
-        targets, _ = batch.class_string_encoded # [bs, 1]
+        if self.hparams.use_mixup and stage == sb.Stage.TRAIN:
+            targets, _ = batch.label_prob
+        else:
+            targets, _ = batch.class_string_encoded # [bs, 1]
+            targets = F.one_hot(targets, predictions.shape[-1]).float()  # [bs, 1, C]
         # TODO: augmentation
         loss = self.hparams.compute_cost(predictions, targets, lens)
-        if hasattr(self.hparams.lr_scheduler, "on_batch_end"):
+        if stage == sb.Stage.TRAIN and \
+           hasattr(self.hparams.lr_scheduler, "on_batch_end"):
             self.hparams.lr_scheduler.on_batch_end(self.optimizer)
         # TODO: metrics
         # Confusion matrices
         if stage != sb.Stage.TRAIN:
-            y_true = targets.cpu().detach().numpy().squeeze(-1)
+            y_true = targets.cpu().detach().numpy().argmax(-1).squeeze(-1)
             y_pred = predictions.cpu().detach().numpy().argmax(-1).squeeze(-1)
 
         if stage == sb.Stage.VALID:
@@ -76,7 +86,7 @@ class SupSoundClassifier(sb.core.Brain):
                 labels=sorted(self.hparams.label_encoder.ind2lab.keys()),
             )
             self.test_confusion_matrix += confusion_matix
-        self.acc_metric.append(predictions, targets, lens)
+        self.acc_metric.append(predictions, targets.argmax(-1), lens)
         return loss
 
     def fit_batch(self, batch):
@@ -549,22 +559,30 @@ if __name__ == "__main__":
             hparams['replay_num_keep'],
         )
         replay['train'] += curr_train_replay
-        train_data = dataio_prep(
-            hparams,
-            os.path.join(hparams['save_folder'], 'train_task{}_replay.csv'.format(task_idx)),
-            label_encoder,
-        )
+        if hparams['use_mixup']:
+            train_data = mixup_dataio_prep(
+                hparams,
+                os.path.join(hparams['save_folder'], 'train_task{}_replay.csv'.format(task_idx)),
+                label_encoder,
+                replay['train'],
+            )
+        else:
+            train_data = dataio_prep(
+                hparams,
+                os.path.join(hparams['save_folder'], 'train_task{}_replay.csv'.format(task_idx)),
+                label_encoder,
+            )
         curr_valid_replay = prepare_task_csv_from_replay(
             os.path.join(hparams['save_folder'], 'valid_task{}_raw.csv'.format(task_idx)),
             replay['valid'],
             hparams['replay_num_keep'],
         )
+        replay['valid'] += curr_valid_replay
         valid_data = dataio_prep(
             hparams,
             os.path.join(hparams['save_folder'], 'valid_task{}_replay.csv'.format(task_idx)),
             label_encoder,
         )
-        replay['valid'] += curr_valid_replay
 
         brain = SupSoundClassifier(
             modules=hparams["modules"],
