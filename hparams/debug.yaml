@@ -1,0 +1,41 @@
+sample_rate: 16000
+# Feature parameters
+n_mels: 80
+left_frames: 0
+right_frames: 0
+deltas: False
+amp_to_db: False
+normalize: True
+# Number of classes
+n_classes: 10
+emb_dim: 192
+
+label_encoder_path: "./dataset/label_encoder.txt"
+
+# Functions
+compute_features: !new:speechbrain.lobes.features.Fbank
+    n_mels: !ref <n_mels>
+    left_frames: !ref <left_frames>
+    right_frames: !ref <right_frames>
+    deltas: !ref <deltas>
+
+mean_var_norm: !new:speechbrain.processing.features.InputNormalization
+    norm_type: sentence
+    std_norm: False
+
+time_domain_aug: !new:speechbrain.lobes.augment.TimeDomainSpecAugment
+    sample_rate: !ref <sample_rate>
+    speeds: [90, 95, 100, 105, 110]
+    drop_freq_count_high: 4
+    drop_chunk_count_high: 4
+    drop_chunk_noise_factor: 0.0
+
+embedding_model: !new:speechbrain.lobes.models.ECAPA_TDNN.ECAPA_TDNN
+    input_size: !ref <n_mels>
+    channels: [1024, 1024, 1024, 1024, 3072]
+    kernel_sizes: [5, 3, 3, 3, 1]
+    dilations: [1, 2, 3, 4, 1]
+    attention_channels: 128
+    lin_neurons: !ref <emb_dim>
+
+ssl_checkpoints_dir: "/mnt/data/zhepei/outputs/cssl_sound/results/2022-02-07+00-23-12_seed_1234+simsiam_test/save"

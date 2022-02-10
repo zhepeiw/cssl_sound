@@ -34,6 +34,36 @@ def prepare_task_csv_from_replay(
     return curr_buffer
 
 
+def prepare_task_csv_for_linclf(
+    input_csv,
+    buffer,
+    num_keep='all',
+):
+    '''
+        prepare csv for each task with a rehearsal buffer
+
+        args:
+            input_csv: str, path to the input csv
+            buffer: list of dicts
+            num_keep: if 'all', keep all
+    '''
+    df = pd.read_csv(input_csv, index_col=None)
+    curr_data = df.to_dict('records')
+    if num_keep == 'all':
+        curr_buffer = curr_data
+    else:
+        rng = np.random.RandomState(1234)
+        curr_buffer = rng.choice(
+            curr_data,
+            min(num_keep, len(curr_data)),
+            replace=False
+        ).tolist()
+    df_agg = pd.DataFrame(curr_buffer + buffer)
+    df_agg['ID'] = np.arange(len(df_agg))
+    df_agg.to_csv(input_csv.replace('raw', 'linclf'), index=False)
+    return curr_buffer
+
+
 def mixup_dataio_prep(
     hparams,
     csv_path,

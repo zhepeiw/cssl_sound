@@ -23,16 +23,16 @@ time_stamp: placeholder
 #   - !tuple (8, 9)
 task_classes:
     - !tuple (0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
-replay_num_keep: 0
+replay_num_keep: all
 
 use_mixup: False
 mixup_alpha: 0.4
 
 # Training parameters
-number_of_epochs: 25
+number_of_epochs: 100
 batch_size: 32
 lr: 0.001
-base_lr: 0.00000001
+base_lr: 0.00001
 max_lr: !ref <lr>
 step_size: 65000
 sample_rate: 16000
@@ -56,7 +56,7 @@ valid_dataloader_opts:
   num_workers: 8
 
 
-experiment_name: simsiam
+experiment_name: linclf
 # output_folder: !ref results/<experiment_name>/<seed>
 output_folder: !ref /mnt/data/zhepei/outputs/cssl_sound/results/<time_stamp>_seed_<seed>+<experiment_name>
 train_log: !ref <output_folder>/train_log.txt
@@ -77,17 +77,6 @@ normalize: True
 n_classes: 10
 emb_dim: 192
 
-# augmentation
-time_domain_aug: !new:speechbrain.lobes.augment.TimeDomainSpecAugment
-    sample_rate: !ref <sample_rate>
-    # drop_chunk_count_high: 2
-    # drop_chunk_noise_factor: 0.05
-    speeds: [90, 95, 100, 105, 110]
-    drop_freq_count_high: 4
-    drop_chunk_count_high: 3
-    # drop_chunk_length_low: 1000
-    # drop_chunk_length_high: 5000
-
 # Functions
 compute_features: !new:speechbrain.lobes.features.Fbank
     n_mels: !ref <n_mels>
@@ -107,28 +96,21 @@ embedding_model: !new:speechbrain.lobes.models.ECAPA_TDNN.ECAPA_TDNN
     attention_channels: 128
     lin_neurons: !ref <emb_dim>
 
-predictor: !new:models.modules.SimSiamPredictor
+classifier_fn: !name:speechbrain.lobes.models.ECAPA_TDNN.Classifier
     input_size: !ref <emb_dim>
-    hidden_size: 48
-
-# classifier: !new:speechbrain.lobes.models.ECAPA_TDNN.Classifier
-#     input_size: !ref <emb_dim>
-#     out_neurons: !ref <n_classes>
+    out_neurons: !ref <n_classes>
 
 modules:
     compute_features: !ref <compute_features>
     embedding_model: !ref <embedding_model>
     # classifier: !ref <classifier>
-    predictor: !ref <predictor>
     mean_var_norm: !ref <mean_var_norm>
 
-# compute_cost: !new:losses.LogSoftmaxWithProbWrapper
-#     # loss_fn: !new:torch.nn.Identity
-#     loss_fn: !new:speechbrain.nnet.losses.AdditiveAngularMargin
-#         margin: 0.2
-#         scale: 30
-compute_simsiam_cost: !new:torch.nn.CosineSimilarity
-    dim: 2
+compute_cost: !new:losses.LogSoftmaxWithProbWrapper
+    # loss_fn: !new:torch.nn.Identity
+    loss_fn: !new:speechbrain.nnet.losses.AdditiveAngularMargin
+        margin: 0.2
+        scale: 30
 
 acc_metric: !name:speechbrain.utils.Accuracy.AccuracyStats
 
@@ -151,15 +133,17 @@ checkpointer: !new:speechbrain.utils.checkpoints.Checkpointer
     checkpoints_dir: !ref <save_folder>
 
 recoverables:
-    embedding_model: !ref <embedding_model>
+    # embedding_model: !ref <embedding_model>
     # classifier: !ref <classifier>
-    predictor: !ref <predictor>
-    normalizer: !ref <mean_var_norm>
+    # normalizer: !ref <mean_var_norm>
     datapoint_counter: !ref <datapoint_counter>
 
 prev_checkpointer: null
 # prev_checkpointer: !new:speechbrain.utils.checkpoints.Checkpointer
 #     checkpoints_dir: !PLACEHOLDER
+
+# ssl_checkpoints_dir: "/mnt/data/zhepei/outputs/cssl_sound/results/2022-02-07+06-14-16_seed_1234+simsiam_finetune/save"
+ssl_checkpoints_dir: "/mnt/data/zhepei/outputs/cssl_sound/results/2022-02-07+00-23-12_seed_1234+simsiam_test/save"
 
 train_logger: !new:speechbrain.utils.train_logger.FileTrainLogger
     save_file: !ref <train_log>
@@ -174,6 +158,6 @@ wandb_logger_fn: !name:utils.MyWandBLogger
     name: !ref <time_stamp>+seed_<seed>+<experiment_name>
     dir: !ref <output_folder>
     reinit: True
-    yaml_config: hparams/simsiam_train.yaml
+    yaml_config: hparams/linclf_train.yaml
     resume: False
 
