@@ -27,18 +27,22 @@ replay_num_keep: 0
 
 use_mixup: False
 mixup_alpha: 0.4
+train_duration: 2.5
 
 # Training parameters
-number_of_epochs: 25
+number_of_epochs: 50
 batch_size: 32
-lr: 0.001
-base_lr: 0.00000001
-max_lr: !ref <lr>
-step_size: 65000
-sample_rate: 16000
-train_duration: 4.0
+# lr: 0.001
+# base_lr: 0.00000001
+# max_lr: !ref <lr>
+# step_size: 65000
+warmup_epochs: 5
+warmup_lr: !ref <batch_size> * 0 / 256
+base_lr: !ref <batch_size> * 0.03 / 256
+final_lr: !ref <batch_size> * 0 / 256
 
 # dataset
+sample_rate: 16000
 data_folder: "/mnt/data/Sound Sets/UrbanSound8K/UrbanSound8K"
 train_folds: [1, 2, 3, 4, 5, 6, 7, 8]
 valid_folds: [9]
@@ -78,15 +82,25 @@ n_classes: 10
 emb_dim: 192
 
 # augmentation
-time_domain_aug: !new:speechbrain.lobes.augment.TimeDomainSpecAugment
-    sample_rate: !ref <sample_rate>
-    # drop_chunk_count_high: 2
-    # drop_chunk_noise_factor: 0.05
-    speeds: [90, 95, 100, 105, 110]
-    drop_freq_count_high: 4
-    drop_chunk_count_high: 3
-    # drop_chunk_length_low: 1000
-    # drop_chunk_length_high: 5000
+# time_domain_aug: !new:speechbrain.lobes.augment.TimeDomainSpecAugment
+#     sample_rate: !ref <sample_rate>
+#     # drop_chunk_count_high: 2
+#     # drop_chunk_noise_factor: 0.05
+#     speeds: [90, 95, 100, 105, 110]
+#     drop_freq_count_high: 4
+#     drop_chunk_count_high: 3
+#     # drop_chunk_length_low: 1000
+#     # drop_chunk_length_high: 5000
+spec_domain_aug: !new:augmentation.TFAugmentation
+    time_warp: True
+    time_warp_window: 8
+    freq_mask: True
+    freq_mask_width: !tuple (0, 10)
+    n_freq_mask: 2
+    time_mask: True
+    time_mask_width: !tuple (0, 10)
+    n_time_mask: 2
+    replace_with_zero: True
 
 # Functions
 compute_features: !new:speechbrain.lobes.features.Fbank
@@ -111,10 +125,6 @@ predictor: !new:models.modules.SimSiamPredictor
     input_size: !ref <emb_dim>
     hidden_size: 48
 
-# classifier: !new:speechbrain.lobes.models.ECAPA_TDNN.Classifier
-#     input_size: !ref <emb_dim>
-#     out_neurons: !ref <n_classes>
-
 modules:
     compute_features: !ref <compute_features>
     embedding_model: !ref <embedding_model>
@@ -122,24 +132,29 @@ modules:
     predictor: !ref <predictor>
     mean_var_norm: !ref <mean_var_norm>
 
-# compute_cost: !new:losses.LogSoftmaxWithProbWrapper
-#     # loss_fn: !new:torch.nn.Identity
-#     loss_fn: !new:speechbrain.nnet.losses.AdditiveAngularMargin
-#         margin: 0.2
-#         scale: 30
 compute_simsiam_cost: !new:torch.nn.CosineSimilarity
     dim: 2
 
 acc_metric: !name:speechbrain.utils.Accuracy.AccuracyStats
 
-opt_class: !name:torch.optim.Adam
-    lr: !ref <lr>
-    weight_decay: 0.000002
+opt_class: !name:torch.optim.SGD
+    lr: !ref <base_lr>
+    weight_decay: 0.0005
+    momentum: 0.9
 
-lr_scheduler_fn: !name:speechbrain.nnet.schedulers.CyclicLRScheduler
+# lr_scheduler_fn: !name:speechbrain.nnet.schedulers.CyclicLRScheduler
+#     base_lr: !ref <base_lr>
+#     max_lr: !ref <max_lr>
+#     step_size: !ref <step_size>
+
+lr_scheduler_fn: !name:schedulers.SimSiamCosineScheduler
+    warmup_epochs: !ref <warmup_epochs>
+    warmup_lr: !ref <warmup_lr>
+    num_epochs: !ref <number_of_epochs>
     base_lr: !ref <base_lr>
-    max_lr: !ref <max_lr>
-    step_size: !ref <step_size>
+    final_lr: !ref <final_lr>
+    steps_per_epoch: 222
+    constant_predictor_lr: True
 
 epoch_counter_fn: !name:speechbrain.utils.epoch_loop.EpochCounter
     limit: !ref <number_of_epochs>

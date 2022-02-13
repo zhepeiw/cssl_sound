@@ -133,3 +133,94 @@ def mixup_dataio_prep(
     )
 
     return ds
+
+
+def mixup_dataio_ssl_prep(
+    hparams,
+    csv_path,
+    label_encoder,
+    buffer,
+):
+    "Creates the datasets and their data processing pipelines."
+
+    config_sample_rate = hparams["sample_rate"]
+    # TODO  use SB implementation but need to make sure it give the same results as PyTorch
+    # resampler = sb.processing.speech_augmentation.Resample(orig_freq=latest_file_sr, new_freq=config_sample_rate)
+    hparams["resampler"] = torchaudio.transforms.Resample(
+        new_freq=config_sample_rate
+    )
+
+    def read_sig(wav_path):
+        sig, read_sr = torchaudio.load(wav_path)
+
+        # If multi-channels, downmix it to a mono channel
+        sig = torch.squeeze(sig)
+        if len(sig.shape) > 1:
+            sig = torch.mean(sig, dim=0)
+
+        # Convert sample rate to required config_sample_rate
+        if read_sr != config_sample_rate:
+            # Re-initialize sampler if source file sample rate changed compared to last file
+            if read_sr != hparams["resampler"].orig_freq:
+                hparams["resampler"] = torchaudio.transforms.Resample(
+                    orig_freq=read_sr, new_freq=config_sample_rate
+                )
+            # Resample audio
+            sig = hparams["resampler"].forward(sig)
+        return sig
+
+    def random_segment(sig, target_len):
+        rstart = torch.randint(0, len(sig) - target_len + 1, (1,)).item()
+        return sig[rstart:rstart+target_len]
+
+    # 2. Define audio pipeline:
+    @sb.utils.data_pipeline.takes("wav_path", "class_name")
+    @sb.utils.data_pipeline.provides("sig1", "sig2", "label_prob")
+    def mixup_pipeline(wav_path, class_name):
+        """Load the signal, and pass it and its length to the corruption class.
+        This is done on the CPU in the `collate_fn`."""
+        data_sig = read_sig(wav_path)
+        data_string_encoded = label_encoder.encode_label_torch(class_name)
+        data_label_onehot = F.one_hot(data_string_encoded, hparams['n_classes']).float()
+        if len(buffer) > 0:
+            buffer_dict = hparams['np_rng'].choice(buffer, size=1)[0]
+            buffer_sig = read_sig(buffer_dict['wav_path'])
+            buffer_name = buffer_dict['class_name']
+            buffer_string_encoded = label_encoder.encode_label_torch(buffer_name)
+            buffer_label_onehot = F.one_hot(buffer_string_encoded, hparams['n_classes']).float()
+            lam = hparams['np_rng'].beta(hparams['mixup_alpha'], hparams['mixup_alpha'])
+            min_len = min(len(data_sig), len(buffer_sig))
+            sig = data_sig[:min_len] * lam + buffer_sig[:min_len] * (1 - lam)
+            assert abs(sig).max() > 0
+            target_len = int(hparams["train_duration"] * config_sample_rate)
+            if len(sig) > target_len:
+                sig1 = random_segment(sig, target_len)
+                sig2 = random_segment(sig, target_len)
+            else:
+                sig1 = sig
+                sig2 = sig.clone()
+            yield sig1
+            yield sig2
+            label_prob = data_label_onehot * lam + buffer_label_onehot * (1 - lam)
+            yield label_prob
+        else:
+            target_len = int(hparams["train_duration"] * config_sample_rate)
+            if len(data_sig) > target_len:
+                sig1 = random_segment(data_sig, target_len)
+                sig2 = random_segment(data_sig, target_len)
+            else:
+                sig1 = data_sig
+                sig2 = data_sig.clone()
+            yield sig1
+            yield sig2
+            yield data_label_onehot
+
+    # Define datasets. We also connect the dataset with the data processing
+    # functions defined above.
+    ds = sb.dataio.dataset.DynamicItemDataset.from_csv(
+        csv_path=csv_path,
+        dynamic_items=[mixup_pipeline],
+        output_keys=["id", "sig1",  "sig2", "label_prob"]
+    )
+
+    return ds

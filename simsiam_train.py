@@ -10,7 +10,6 @@ import datetime
 import speechbrain as sb
 from speechbrain.utils.distributed import run_on_main
 from dataset.prepare_urbansound8k import prepare_split_urbansound8k_csv
-#  from dataset.data_pipelines import dataio_prep
 from tqdm import tqdm
 from sklearn.metrics import confusion_matrix
 import numpy as np
@@ -18,7 +17,7 @@ import wandb
 from confusion_matrix_fig import create_cm_fig
 from dataset.cl_pipeline import (
     prepare_task_csv_from_replay,
-    mixup_dataio_prep,
+    mixup_dataio_ssl_prep,
 )
 
 import pdb
@@ -30,31 +29,32 @@ class SimSiam(sb.core.Brain):
     """
     def compute_forward(self, batch, stage):
         batch = batch.to(self.device)
-        wavs, lens = batch.sig
+        wavs1, lens = batch.sig1
+        wavs2, _ = batch.sig2
 
-        x1 = self.prepare_features(wavs, lens, stage)
-        x2 = self.prepare_features(wavs, lens, stage)
+        x1 = self.prepare_features(wavs1, lens, stage)
+        x2 = self.prepare_features(wavs2, lens, stage)
         # Embeddings
         z1 = self.modules.embedding_model(x1)  # [B, 1, D]
         z2 = self.modules.embedding_model(x2)  # [B, 1, D]
         p1 = self.modules.predictor(z1)  # [B, 1, D]
         p2 = self.modules.predictor(z2)  # [B, 1, D]
-        #  outputs = self.modules.classifier(embeddings)
 
         return p1, p2, z1.detach(), z2.detach(), lens
 
     def prepare_features(self, wavs, lens, stage):
         # time domain augmentation
-        wavs_aug = self.hparams.time_domain_aug(wavs, lens)
-        if wavs_aug.shape[1] > wavs.shape[1]:
-            wavs_aug = wavs_aug[:, 0 : wavs.shape[1]]
-        else:
-            zero_sig = torch.zeros_like(wavs)
-            zero_sig[:, 0 : wavs_aug.shape[1]] = wavs_aug
-            wavs_aug = zero_sig
-        wavs = wavs_aug
+        #  wavs_aug = self.hparams.time_domain_aug(wavs, lens)
+        #  if wavs_aug.shape[1] > wavs.shape[1]:
+        #      wavs_aug = wavs_aug[:, 0 : wavs.shape[1]]
+        #  else:
+        #      zero_sig = torch.zeros_like(wavs)
+        #      zero_sig[:, 0 : wavs_aug.shape[1]] = wavs_aug
+        #      wavs_aug = zero_sig
+        #  wavs = wavs_aug
 
-        feats = self.modules.compute_features(wavs)
+        feats = self.modules.compute_features(wavs)  # [B, T, D]
+        feats = self.hparams.spec_domain_aug(feats, lens)
         if self.hparams.amp_to_db:
             Amp2db = torchaudio.transforms.AmplitudeToDB(
                 stype="power", top_db=80
@@ -104,7 +104,7 @@ class SimSiam(sb.core.Brain):
             if self.check_gradients(loss):
                 self.scaler.step(self.optimizer)
                 # wandb logger: update datapoints info
-                self.hparams.datapoint_counter.update(batch.sig.data.shape[0])
+                self.hparams.datapoint_counter.update(batch.sig1.data.shape[0])
             self.scaler.update()
         else:
             outputs = self.compute_forward(batch, sb.Stage.TRAIN)
@@ -113,7 +113,7 @@ class SimSiam(sb.core.Brain):
             if self.check_gradients(loss):
                 self.optimizer.step()
                 # wandb logger: update datapoints info
-                self.hparams.datapoint_counter.update(batch.sig.data.shape[0])
+                self.hparams.datapoint_counter.update(batch.sig1.data.shape[0])
             self.optimizer.zero_grad()
 
         # wandb logger
@@ -178,6 +178,23 @@ class SimSiam(sb.core.Brain):
         self.train_loss_buffer = []
         self.train_stats = {}
 
+    def init_optimizers(self):
+        if self.opt_class is not None:
+            predictor_prefix = ('module.predictor', 'predictor')
+            optim_params = [{
+                'name': 'base',
+                'params': [param for name, param in self.modules.named_parameters() if not name.startswith(predictor_prefix)],
+                'fix_lr': False,
+            }, {
+                'name': 'predictor',
+                'params': [param for name, param in self.modules.named_parameters() if name.startswith(predictor_prefix)],
+                'fix_lr': True,
+            }]
+            self.optimizer = self.opt_class(optim_params)
+
+            if self.checkpointer is not None:
+                self.checkpointer.add_recoverable("optimizer", self.optimizer)
+
     def on_stage_start(self, stage, epoch=None):
         """Gets called at the beginning of each epoch.
         Arguments
@@ -225,7 +242,7 @@ class SimSiam(sb.core.Brain):
             )
 
 
-def dataio_prep(hparams, csv_path, label_encoder):
+def dataio_ssl_prep(hparams, csv_path, label_encoder):
     "Creates the datasets and their data processing pipelines."
 
     config_sample_rate = hparams["sample_rate"]
@@ -235,9 +252,13 @@ def dataio_prep(hparams, csv_path, label_encoder):
         new_freq=config_sample_rate
     )
 
+    def random_segment(sig, target_len):
+        rstart = torch.randint(0, len(sig) - target_len + 1, (1,)).item()
+        return sig[rstart:rstart+target_len]
+
     # 2. Define audio pipeline:
     @sb.utils.data_pipeline.takes("wav_path")
-    @sb.utils.data_pipeline.provides("sig")
+    @sb.utils.data_pipeline.provides("sig1", "sig2")
     def audio_pipeline(wav_path):
         """Load the signal, and pass it and its length to the corruption class.
         This is done on the CPU in the `collate_fn`."""
@@ -259,7 +280,15 @@ def dataio_prep(hparams, csv_path, label_encoder):
             # Resample audio
             sig = hparams["resampler"].forward(sig)
 
-        return sig
+        target_len = int(hparams["train_duration"] * config_sample_rate)
+        if len(sig) > target_len:
+            sig1 = random_segment(sig, target_len)
+            sig2 = random_segment(sig, target_len)
+        else:
+            sig1 = sig
+            sig2 = sig.clone()
+        yield sig1
+        yield sig2
 
     # 3. Define label pipeline:
     @sb.utils.data_pipeline.takes("class_name")
@@ -274,7 +303,7 @@ def dataio_prep(hparams, csv_path, label_encoder):
     ds = sb.dataio.dataset.DynamicItemDataset.from_csv(
         csv_path=csv_path,
         dynamic_items=[audio_pipeline, label_pipeline],
-        output_keys=["id", "sig", "class_string_encoded"]
+        output_keys=["id", "sig1", "sig2", "class_string_encoded"]
     )
 
     return ds
@@ -371,14 +400,14 @@ if __name__ == "__main__":
         )
         replay['train'] += curr_train_replay
         if hparams['use_mixup']:
-            train_data = mixup_dataio_prep(
+            train_data = mixup_dataio_ssl_prep(
                 hparams,
                 os.path.join(hparams['save_folder'], 'train_task{}_replay.csv'.format(task_idx)),
                 label_encoder,
                 replay['train'],
             )
         else:
-            train_data = dataio_prep(
+            train_data = dataio_ssl_prep(
                 hparams,
                 os.path.join(hparams['save_folder'], 'train_task{}_replay.csv'.format(task_idx)),
                 label_encoder,
