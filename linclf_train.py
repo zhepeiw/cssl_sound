@@ -32,7 +32,6 @@ class LinearClassifier(sb.core.Brain):
         batch = batch.to(self.device)
         wavs, lens = batch.sig
 
-        pdb.set_trace()
         feats = self.prepare_features(wavs, lens, stage)  # [B, T, F]
         # Embeddings + sound classifier
         embeddings = self.modules.embedding_model(feats)  # [B, 1, D]
@@ -191,6 +190,24 @@ class LinearClassifier(sb.core.Brain):
         self.train_loss_buffer = []
         self.train_stats = {}
 
+    def init_optimizers(self):
+        if self.opt_class is not None:
+            predictor_prefix = ('module.predictor', 'predictor')
+            optim_params = [{
+                'name': 'base',
+                'params': [param for name, param in self.modules.named_parameters() if not name.startswith(predictor_prefix)],
+                'fix_lr': False,
+            }, {
+                'name': 'predictor',
+                'params': [param for name, param in self.modules.named_parameters() if name.startswith(predictor_prefix)],
+                'fix_lr': True,
+            }]
+            self.optimizer = self.opt_class(optim_params)
+
+            if self.checkpointer is not None:
+                self.checkpointer.add_recoverable("optimizer", self.optimizer)
+
+
     def on_stage_start(self, stage, epoch=None):
         """Gets called at the beginning of each epoch.
         Arguments
@@ -245,7 +262,8 @@ class LinearClassifier(sb.core.Brain):
         # Perform end-of-iteration things, like annealing, logging, etc.
         if stage == sb.Stage.VALID:
             old_lr, new_lr = self.hparams.lr_scheduler(epoch)
-            sb.nnet.schedulers.update_learning_rate(self.optimizer, new_lr)
+            if not hasattr(self.hparams.lr_scheduler, "on_batch_end"):
+                sb.nnet.schedulers.update_learning_rate(self.optimizer, new_lr)
             # The train_logger writes a summary to stdout and to the logfile.
             # wandb logger
             if self.hparams.use_wandb:

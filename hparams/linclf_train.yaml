@@ -29,16 +29,19 @@ use_mixup: False
 mixup_alpha: 0.4
 
 # Training parameters
-number_of_epochs: 100
+number_of_epochs: 30
 batch_size: 32
-lr: 0.001
-base_lr: 0.00001
-max_lr: !ref <lr>
-step_size: 65000
-sample_rate: 16000
-train_duration: 4.0
+# lr: 0.001
+# base_lr: 0.00000001
+# max_lr: !ref <lr>
+# step_size: 65000
+warmup_epochs: 0
+warmup_lr: !ref <batch_size> * 0 / 256
+base_lr: !ref <batch_size> * 30 / 256
+final_lr: !ref <batch_size> * 0 / 256
 
 # dataset
+sample_rate: 16000
 data_folder: "/mnt/data/Sound Sets/UrbanSound8K/UrbanSound8K"
 train_folds: [1, 2, 3, 4, 5, 6, 7, 8]
 valid_folds: [9]
@@ -114,14 +117,18 @@ compute_cost: !new:losses.LogSoftmaxWithProbWrapper
 
 acc_metric: !name:speechbrain.utils.Accuracy.AccuracyStats
 
-opt_class: !name:torch.optim.Adam
-    lr: !ref <lr>
-    weight_decay: 0.000002
+opt_class: !name:torch.optim.SGD
+    lr: !ref <base_lr>
+    weight_decay: 0
+    momentum: 0.9
 
-lr_scheduler_fn: !name:speechbrain.nnet.schedulers.CyclicLRScheduler
+lr_scheduler_fn: !name:schedulers.SimSiamCosineScheduler
+    warmup_epochs: !ref <warmup_epochs>
+    warmup_lr: !ref <warmup_lr>
+    num_epochs: !ref <number_of_epochs>
     base_lr: !ref <base_lr>
-    max_lr: !ref <max_lr>
-    step_size: !ref <step_size>
+    final_lr: !ref <final_lr>
+    steps_per_epoch: 222
 
 epoch_counter_fn: !name:speechbrain.utils.epoch_loop.EpochCounter
     limit: !ref <number_of_epochs>
@@ -142,8 +149,7 @@ prev_checkpointer: null
 # prev_checkpointer: !new:speechbrain.utils.checkpoints.Checkpointer
 #     checkpoints_dir: !PLACEHOLDER
 
-# ssl_checkpoints_dir: "/mnt/data/zhepei/outputs/cssl_sound/results/2022-02-07+06-14-16_seed_1234+simsiam_finetune/save"
-ssl_checkpoints_dir: "/mnt/data/zhepei/outputs/cssl_sound/results/2022-02-07+00-23-12_seed_1234+simsiam_test/save"
+ssl_checkpoints_dir: "/mnt/data/zhepei/outputs/cssl_sound/results/2022-02-13+21-29-30_seed_1234+simsiam_offline_sgd/save"
 
 train_logger: !new:speechbrain.utils.train_logger.FileTrainLogger
     save_file: !ref <train_log>

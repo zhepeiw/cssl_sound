@@ -227,7 +227,8 @@ class SimSiam(sb.core.Brain):
         # Perform end-of-iteration things, like annealing, logging, etc.
         if stage == sb.Stage.TRAIN:
             old_lr, new_lr = self.hparams.lr_scheduler(epoch)
-            sb.nnet.schedulers.update_learning_rate(self.optimizer, new_lr)
+            if not hasattr(self.hparams.lr_scheduler, "on_batch_end"):
+                sb.nnet.schedulers.update_learning_rate(self.optimizer, new_lr)
             self.hparams.train_logger.log_stats(
                 stats_meta={
                     "epoch": epoch,
