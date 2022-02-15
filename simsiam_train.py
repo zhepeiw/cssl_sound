@@ -35,8 +35,8 @@ class SimSiam(sb.core.Brain):
         x1 = self.prepare_features(wavs1, lens, stage)
         x2 = self.prepare_features(wavs2, lens, stage)
         # Embeddings
-        z1 = self.modules.embedding_model(x1)  # [B, 1, D]
-        z2 = self.modules.embedding_model(x2)  # [B, 1, D]
+        z1 = self.modules.projector(self.modules.embedding_model(x1))  # [B, 1, D]
+        z2 = self.modules.projector(self.modules.embedding_model(x2))  # [B, 1, D]
         p1 = self.modules.predictor(z1)  # [B, 1, D]
         p2 = self.modules.predictor(z2)  # [B, 1, D]
 

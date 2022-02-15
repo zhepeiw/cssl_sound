@@ -79,7 +79,7 @@ amp_to_db: False
 normalize: True
 # Number of classes
 n_classes: 10
-emb_dim: 192
+emb_dim: 2048
 
 # augmentation
 # time_domain_aug: !new:speechbrain.lobes.augment.TimeDomainSpecAugment
@@ -113,22 +113,28 @@ mean_var_norm: !new:speechbrain.processing.features.InputNormalization
     norm_type: sentence
     std_norm: False
 
-embedding_model: !new:speechbrain.lobes.models.ECAPA_TDNN.ECAPA_TDNN
+embedding_model: !new:models.tdnn.ECAPA_TDNN
     input_size: !ref <n_mels>
-    channels: [1024, 1024, 1024, 1024, 3072]
-    kernel_sizes: [5, 3, 3, 3, 1]
-    dilations: [1, 2, 3, 4, 1]
+    channels: [512, 512, 512, 1024]
+    kernel_sizes: [5, 3, 3, 1]
+    dilations: [1, 2, 3, 1]
     attention_channels: 128
     lin_neurons: !ref <emb_dim>
 
+projector: !new:models.modules.SimSiamProjector
+    input_size: !ref <emb_dim>
+    hidden_size: !ref <emb_dim>
+    output_size: !ref <emb_dim>
+
 predictor: !new:models.modules.SimSiamPredictor
     input_size: !ref <emb_dim>
-    hidden_size: 48
+    hidden_size: !ref <emb_dim> // 4
 
 modules:
     compute_features: !ref <compute_features>
     embedding_model: !ref <embedding_model>
     # classifier: !ref <classifier>
+    projector: !ref <projector>
     predictor: !ref <predictor>
     mean_var_norm: !ref <mean_var_norm>
 
@@ -168,6 +174,7 @@ checkpointer: !new:speechbrain.utils.checkpoints.Checkpointer
 recoverables:
     embedding_model: !ref <embedding_model>
     # classifier: !ref <classifier>
+    projector: !ref <projector>
     predictor: !ref <predictor>
     normalizer: !ref <mean_var_norm>
     datapoint_counter: !ref <datapoint_counter>

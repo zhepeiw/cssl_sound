@@ -78,7 +78,7 @@ amp_to_db: False
 normalize: True
 # Number of classes
 n_classes: 10
-emb_dim: 192
+emb_dim: 2048
 
 # Functions
 compute_features: !new:speechbrain.lobes.features.Fbank
@@ -91,11 +91,11 @@ mean_var_norm: !new:speechbrain.processing.features.InputNormalization
     norm_type: sentence
     std_norm: False
 
-embedding_model: !new:speechbrain.lobes.models.ECAPA_TDNN.ECAPA_TDNN
+embedding_model: !new:models.tdnn.ECAPA_TDNN
     input_size: !ref <n_mels>
-    channels: [1024, 1024, 1024, 1024, 3072]
-    kernel_sizes: [5, 3, 3, 3, 1]
-    dilations: [1, 2, 3, 4, 1]
+    channels: [512, 512, 512, 1024]
+    kernel_sizes: [5, 3, 3, 1]
+    dilations: [1, 2, 3, 1]
     attention_channels: 128
     lin_neurons: !ref <emb_dim>
 
@@ -149,7 +149,7 @@ prev_checkpointer: null
 # prev_checkpointer: !new:speechbrain.utils.checkpoints.Checkpointer
 #     checkpoints_dir: !PLACEHOLDER
 
-ssl_checkpoints_dir: "/mnt/data/zhepei/outputs/cssl_sound/results/2022-02-13+21-29-30_seed_1234+simsiam_offline_sgd/save"
+ssl_checkpoints_dir: "/mnt/data/zhepei/outputs/cssl_sound/results/2022-02-15+02-57-52_seed_1234+simsiam_tdnn/save"
 
 train_logger: !new:speechbrain.utils.train_logger.FileTrainLogger
     save_file: !ref <train_log>
