@@ -80,6 +80,7 @@ class Cnn14(nn.Module):
     def __init__(
         self,
         mel_bins,
+        emb_dim,
     ):
 
         super(Cnn14, self).__init__()
@@ -112,7 +113,7 @@ class Cnn14(nn.Module):
         self.conv_block3 = ConvBlock(in_channels=128, out_channels=256)
         self.conv_block4 = ConvBlock(in_channels=256, out_channels=512)
         self.conv_block5 = ConvBlock(in_channels=512, out_channels=1024)
-        self.conv_block6 = ConvBlock(in_channels=1024, out_channels=2048)
+        self.conv_block6 = ConvBlock(in_channels=1024, out_channels=emb_dim)
 
         #  self.fc1 = nn.Linear(2048, 2048, bias=True)
         #  self.fc_audioset = nn.Linear(2048, classes_num, bias=True)
@@ -131,6 +132,8 @@ class Cnn14(nn.Module):
         #  x = self.spectrogram_extractor(input)   # (batch_size, 1, time_steps, freq_bins)
         #  x = self.logmel_extractor(x)    # (batch_size, 1, time_steps, mel_bins)
 
+        if x.dim() == 3:
+            x = x.unsqueeze(1)
         x = x.transpose(1, 3)
         x = self.bn0(x)
         x = x.transpose(1, 3)
@@ -159,7 +162,7 @@ class Cnn14(nn.Module):
         (x1, _) = torch.max(x, dim=2)
         x2 = torch.mean(x, dim=2)
         x = x1 + x2
-        return x
+        return x.unsqueeze(1)  # [B, 1, D]
         #  x = F.dropout(x, p=0.5, training=self.training)
         #  x = F.relu_(self.fc1(x))
         #  embedding = F.dropout(x, p=0.5, training=self.training)
@@ -172,7 +175,7 @@ class Cnn14(nn.Module):
 
 if __name__ == '__main__':
     x = torch.randn(32, 1, 200, 80)
-    model = Cnn14(80)
+    model = Cnn14(80, 2048)
     print(sum(p.numel() for p in model.parameters() if p.requires_grad))
     out = model(x)
     print(out.shape)

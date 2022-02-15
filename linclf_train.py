@@ -29,12 +29,14 @@ class LinearClassifier(sb.core.Brain):
         Brain class for classifier with supervised training
     """
     def compute_forward(self, batch, stage):
+        self.modules.embedding_model.eval()
         batch = batch.to(self.device)
         wavs, lens = batch.sig
 
-        feats = self.prepare_features(wavs, lens, stage)  # [B, T, F]
-        # Embeddings + sound classifier
-        embeddings = self.modules.embedding_model(feats)  # [B, 1, D]
+        with torch.no_grad():
+            feats = self.prepare_features(wavs, lens, stage)  # [B, T, F]
+            # Embeddings + sound classifier
+            embeddings = self.modules.embedding_model(feats)  # [B, 1, D]
         outputs = self.modules.classifier(embeddings)
 
         return outputs, lens
