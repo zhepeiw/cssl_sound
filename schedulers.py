@@ -66,7 +66,7 @@ class SimSiamCosineScheduler:
     def _get_lr_scale(self, step):
         warmup_steps = len(self.warmup_lr_schedule)
         if step < warmup_steps:
-            return self.warmup_lr_schedule[min(0, step)]
+            return self.warmup_lr_schedule[max(0, step)]
         else:
             idx = (step - warmup_steps) % len(self.cosine_lr_schedule)
             return self.cosine_lr_schedule[idx]

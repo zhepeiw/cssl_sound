@@ -60,7 +60,6 @@ class SimSiam(sb.core.Brain):
                 stype="power", top_db=80
             )  # try "magnitude" Vs "power"? db= 80, 50...
             feats = Amp2db(feats)
-
         # Normalization
         if self.hparams.normalize:
             feats = self.modules.mean_var_norm(feats, lens)
@@ -281,6 +280,12 @@ def dataio_ssl_prep(hparams, csv_path, label_encoder):
             # Resample audio
             sig = hparams["resampler"].forward(sig)
 
+        # scaling
+        max_amp = torch.abs(sig).max().item()
+        #  assert max_amp > 0
+        scaling = 1 / max_amp * 0.9
+        sig = scaling * sig
+
         target_len = int(hparams["train_duration"] * config_sample_rate)
         if len(sig) > target_len:
             sig1 = random_segment(sig, target_len)
@@ -422,6 +427,7 @@ if __name__ == "__main__":
             checkpointer=hparams["checkpointer"],
         )
 
+        #  with torch.autograd.detect_anomaly():
         brain.fit(
             epoch_counter=brain.hparams.epoch_counter,
             train_set=train_data,

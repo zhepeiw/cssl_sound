@@ -27,7 +27,7 @@ replay_num_keep: 0
 
 use_mixup: False
 mixup_alpha: 0.4
-train_duration: 2.5
+train_duration: 2.0
 
 # Training parameters
 number_of_epochs: 50
@@ -39,7 +39,7 @@ batch_size: 32
 warmup_epochs: 5
 warmup_lr: !ref <batch_size> * 0 / 256
 base_lr: !ref <batch_size> * 0.03 / 256
-final_lr: !ref <batch_size> * 0 / 256
+final_lr: !ref <batch_size> * 0.00000001 / 256
 
 # dataset
 sample_rate: 16000
@@ -77,6 +77,10 @@ right_frames: 0
 deltas: False
 amp_to_db: False
 normalize: True
+win_length: 25
+hop_length: 10
+n_fft: !ref <win_length> * <sample_rate> // 1000
+f_min: 0
 # Number of classes
 n_classes: 10
 emb_dim: 2048
@@ -108,6 +112,11 @@ compute_features: !new:speechbrain.lobes.features.Fbank
     left_frames: !ref <left_frames>
     right_frames: !ref <right_frames>
     deltas: !ref <deltas>
+    sample_rate: !ref <sample_rate>
+    n_fft: !ref <n_fft>
+    win_length: !ref <win_length>
+    hop_length: !ref <hop_length>
+    f_min: !ref <f_min>
 
 mean_var_norm: !new:speechbrain.processing.features.InputNormalization
     norm_type: sentence
@@ -143,15 +152,19 @@ compute_simsiam_cost: !new:torch.nn.CosineSimilarity
 
 acc_metric: !name:speechbrain.utils.Accuracy.AccuracyStats
 
+# opt_class: !name:torch.optim.Adam
+#     lr: !ref <base_lr>
+#     weight_decay: 0.0005
+#
+# lr_scheduler_fn: !name:speechbrain.nnet.schedulers.CyclicLRScheduler
+#     base_lr: !ref <final_lr>
+#     max_lr: !ref <base_lr>
+#     step_size: 888
+
 opt_class: !name:torch.optim.SGD
     lr: !ref <base_lr>
     weight_decay: 0.0005
     momentum: 0.9
-
-# lr_scheduler_fn: !name:speechbrain.nnet.schedulers.CyclicLRScheduler
-#     base_lr: !ref <base_lr>
-#     max_lr: !ref <max_lr>
-#     step_size: !ref <step_size>
 
 lr_scheduler_fn: !name:schedulers.SimSiamCosineScheduler
     warmup_epochs: !ref <warmup_epochs>

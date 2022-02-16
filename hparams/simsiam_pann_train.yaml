@@ -27,7 +27,7 @@ replay_num_keep: 0
 
 use_mixup: False
 mixup_alpha: 0.4
-train_duration: 2.5
+train_duration: 2.0
 
 # Training parameters
 number_of_epochs: 50
@@ -77,6 +77,10 @@ right_frames: 0
 deltas: False
 amp_to_db: True
 normalize: True
+win_length: 25
+hop_length: 10
+n_fft: !ref <win_length> * <sample_rate> // 1000
+f_min: 0
 # Number of classes
 n_classes: 10
 emb_dim: 2048
@@ -109,9 +113,10 @@ compute_features: !new:speechbrain.lobes.features.Fbank
     right_frames: !ref <right_frames>
     deltas: !ref <deltas>
     sample_rate: !ref <sample_rate>
-    n_fft: 320
-    win_length: 20
-    hop_length: 10
+    n_fft: !ref <n_fft>
+    win_length: !ref <win_length>
+    hop_length: !ref <hop_length>
+    f_min: !ref <f_min>
 
 mean_var_norm: !new:speechbrain.processing.features.InputNormalization
     norm_type: sentence
