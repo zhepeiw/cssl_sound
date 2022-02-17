@@ -244,7 +244,8 @@ class SupSoundClassifier(sb.core.Brain):
         # Perform end-of-iteration things, like annealing, logging, etc.
         if stage == sb.Stage.VALID:
             old_lr, new_lr = self.hparams.lr_scheduler(epoch)
-            sb.nnet.schedulers.update_learning_rate(self.optimizer, new_lr)
+            if not hasattr(self.hparams.lr_scheduler, "on_batch_end"):
+                sb.nnet.schedulers.update_learning_rate(self.optimizer, new_lr)
             # The train_logger writes a summary to stdout and to the logfile.
             # wandb logger
             if self.hparams.use_wandb:
@@ -429,6 +430,12 @@ def dataio_prep(hparams, csv_path, label_encoder):
                 )
             # Resample audio
             sig = hparams["resampler"].forward(sig)
+
+        # scaling
+        max_amp = torch.abs(sig).max().item()
+        #  assert max_amp > 0
+        scaling = 1 / max_amp * 0.9
+        sig = scaling * sig
 
         return sig
 

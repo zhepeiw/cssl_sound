@@ -62,7 +62,7 @@ valid_dataloader_opts:
 
 experiment_name: simsiam
 # output_folder: !ref results/<experiment_name>/<seed>
-output_folder: !ref /mnt/data/zhepei/outputs/cssl_sound/results/<time_stamp>_seed_<seed>+<experiment_name>
+output_folder: !ref /mnt/data/zhepei/outputs/cssl_sound/offline/<time_stamp>_seed_<seed>+<experiment_name>
 train_log: !ref <output_folder>/train_log.txt
 save_folder: !ref <output_folder>/save
 
@@ -124,11 +124,19 @@ mean_var_norm: !new:speechbrain.processing.features.InputNormalization
 
 embedding_model: !new:models.tdnn.ECAPA_TDNN
     input_size: !ref <n_mels>
-    channels: [512, 512, 512, 1024]
-    kernel_sizes: [5, 3, 3, 1]
-    dilations: [1, 2, 3, 1]
+    channels: [1024, 1024, 1024, 1024, 3072]
+    kernel_sizes: [5, 3, 3, 3, 1]
+    dilations: [1, 2, 3, 4, 1]
     attention_channels: 128
     lin_neurons: !ref <emb_dim>
+#     # channels: [512, 512, 512, 1024]
+#     # kernel_sizes: [5, 3, 3, 1]
+#     # dilations: [1, 2, 3, 1]
+#     # attention_channels: 128
+#     # lin_neurons: !ref <emb_dim>
+# embedding_model: !new:models.pann.Cnn14
+#     mel_bins: !ref <n_mels>
+#     emb_dim: !ref <emb_dim>
 
 projector: !new:models.modules.SimSiamProjector
     input_size: !ref <emb_dim>

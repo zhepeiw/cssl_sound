@@ -21,6 +21,7 @@ class SimSiamCosineScheduler:
         steps_per_epoch,
         constant_predictor_lr=False,
     ):
+        final_lr = float(final_lr)
         self.base_lr = base_lr
         self.constant_predictor_lr = constant_predictor_lr
         warmup_steps = int(steps_per_epoch * warmup_epochs)

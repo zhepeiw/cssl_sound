@@ -96,6 +96,11 @@ def mixup_dataio_prep(
                 )
             # Resample audio
             sig = hparams["resampler"].forward(sig)
+        # scaling
+        max_amp = torch.abs(sig).max().item()
+        #  assert max_amp > 0
+        scaling = 1 / max_amp * 0.9
+        sig = scaling * sig
         return sig
 
     # 2. Define audio pipeline:
@@ -167,6 +172,11 @@ def mixup_dataio_ssl_prep(
                 )
             # Resample audio
             sig = hparams["resampler"].forward(sig)
+        # scaling
+        max_amp = torch.abs(sig).max().item()
+        #  assert max_amp > 0
+        scaling = 1 / max_amp * 0.9
+        sig = scaling * sig
         return sig
 
     def random_segment(sig, target_len):

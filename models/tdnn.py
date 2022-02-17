@@ -107,12 +107,12 @@ class ECAPA_TDNN(torch.nn.Module):
         )
         self.asp_bn = BatchNorm1d(input_size=channels[-1] * 2)
 
-        #  # Final linear transformation
-        #  self.fc = Conv1d(
-        #      in_channels=channels[-1] * 2,
-        #      out_channels=lin_neurons,
-        #      kernel_size=1,
-        #  )
+        # Final linear transformation
+        self.fc = Conv1d(
+            in_channels=channels[-1] * 2,
+            out_channels=lin_neurons,
+            kernel_size=1,
+        )
 
     def forward(self, x, lengths=None):
         """Returns the embedding vector.
@@ -140,8 +140,8 @@ class ECAPA_TDNN(torch.nn.Module):
         x = self.asp(x, lengths=lengths)
         x = self.asp_bn(x)
 
-        #  # Final linear transformation
-        #  x = self.fc(x)
+        # Final linear transformation
+        x = self.fc(x)
 
         x = x.transpose(1, 2)  # [B, 1, D]
         return x

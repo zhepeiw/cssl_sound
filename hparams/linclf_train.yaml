@@ -61,7 +61,7 @@ valid_dataloader_opts:
 
 experiment_name: linclf
 # output_folder: !ref results/<experiment_name>/<seed>
-output_folder: !ref /mnt/data/zhepei/outputs/cssl_sound/results/<time_stamp>_seed_<seed>+<experiment_name>
+output_folder: !ref /mnt/data/zhepei/outputs/cssl_sound/offline/<time_stamp>_seed_<seed>+<experiment_name>
 train_log: !ref <output_folder>/train_log.txt
 save_folder: !ref <output_folder>/save
 
@@ -100,17 +100,31 @@ mean_var_norm: !new:speechbrain.processing.features.InputNormalization
     norm_type: sentence
     std_norm: False
 
-embedding_model: !new:models.tdnn.ECAPA_TDNN
-    input_size: !ref <n_mels>
-    channels: [512, 512, 512, 1024]
-    kernel_sizes: [5, 3, 3, 1]
-    dilations: [1, 2, 3, 1]
-    attention_channels: 128
-    lin_neurons: !ref <emb_dim>
+# embedding_model: !new:models.tdnn.ECAPA_TDNN
+#     input_size: !ref <n_mels>
+#     channels: [1024, 1024, 1024, 1024, 3072]
+#     kernel_sizes: [5, 3, 3, 3, 1]
+#     dilations: [1, 2, 3, 4, 1]
+#     attention_channels: 128
+#     lin_neurons: !ref <emb_dim>
+# embedding_model: !new:models.tdnn.ECAPA_TDNN
+#     input_size: !ref <n_mels>
+#     channels: [512, 512, 512, 1024]
+#     kernel_sizes: [5, 3, 3, 1]
+#     dilations: [1, 2, 3, 1]
+#     attention_channels: 128
+#     lin_neurons: !ref <emb_dim>
+embedding_model: !new:models.pann.Cnn14
+    mel_bins: !ref <n_mels>
+    emb_dim: !ref <emb_dim>
 
-classifier_fn: !name:speechbrain.lobes.models.ECAPA_TDNN.Classifier
+# classifier_fn: !name:speechbrain.lobes.models.ECAPA_TDNN.Classifier
+#     input_size: !ref <emb_dim>
+#     out_neurons: !ref <n_classes>
+
+classifier_fn: !name:models.modules.Classifier
     input_size: !ref <emb_dim>
-    out_neurons: !ref <n_classes>
+    output_size: !ref <n_classes>
 
 modules:
     compute_features: !ref <compute_features>
@@ -119,10 +133,10 @@ modules:
     mean_var_norm: !ref <mean_var_norm>
 
 compute_cost: !new:losses.LogSoftmaxWithProbWrapper
-    # loss_fn: !new:torch.nn.Identity
-    loss_fn: !new:speechbrain.nnet.losses.AdditiveAngularMargin
-        margin: 0.2
-        scale: 30
+    loss_fn: !new:torch.nn.Identity
+    # loss_fn: !new:speechbrain.nnet.losses.AdditiveAngularMargin
+    #     margin: 0.2
+    #     scale: 30
 
 acc_metric: !name:speechbrain.utils.Accuracy.AccuracyStats
 
@@ -167,7 +181,7 @@ prev_checkpointer: null
 # prev_checkpointer: !new:speechbrain.utils.checkpoints.Checkpointer
 #     checkpoints_dir: !PLACEHOLDER
 
-ssl_checkpoints_dir: "/mnt/data/zhepei/outputs/cssl_sound/results/2022-02-16+02-22-36_seed_1234+simsiam_offline_tdnn_6/save"
+ssl_checkpoints_dir: "/mnt/data/zhepei/outputs/cssl_sound/offline/2022-02-17+18-44-34_seed_1234+cnn1_sim_fold1/save"
 
 train_logger: !new:speechbrain.utils.train_logger.FileTrainLogger
     save_file: !ref <train_log>

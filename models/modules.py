@@ -42,3 +42,14 @@ class SimSiamProjector(nn.Module):
         '''
         return self.net(x.squeeze(1)).unsqueeze(1)
 
+class Classifier(nn.Module):
+    def __init__(
+        self,
+        input_size,
+        output_size
+    ):
+        super(Classifier, self).__init__()
+        self.layer = nn.Linear(input_size, output_size)
+
+    def forward(self, x):
+        return self.layer(x.squeeze(1)).unsqueeze(1)
