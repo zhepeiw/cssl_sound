@@ -28,6 +28,8 @@ before running the training script.
 You may want to checkout the following configurations in the hyperparameter yaml file to configure the experiments:
   - `replay_num_keep`: size of the replay buffer for each task
   - `use_mixup`: flag of using mixup as a data augmentation
+  - `training_folds`, `valid_folds`, `test_folds`: urbansound8k fold index for training, validation and test
+  - `embedding_model`: encoder/backbone model, currently support the TDNN and PANN architectures
 
 ### SimSiam Training
 Similar to the settings in the supervised training, to run experiments with SimSiam as a self-supervised method, run
@@ -35,3 +37,9 @@ Similar to the settings in the supervised training, to run experiments with SimS
 ```bash
 python simsiam_train.py hparams/simsiam_train.yaml --data_folder <YOUR_DATA_FOLDER> --output_folder <YOUR_OUTPUT_FOLDER>
 ```
+
+To run the linear classification on top of the pretrained models, run
+```bash
+python linclf_train.py hparams/linclf_train.yaml --data_folder <YOUR_DATA_FOLDER> --output_folder <YOUR_OUTPUT_FOLDER> --ssl_checkpoints_dir <YOUR_SSL_FOLDER>
+```
+Make sure the `YOUR_SSL_FOLDER` ends with the `save` directory, as the file will redirect under the `save` directory to look for the proper checkpoint for each individual task.
