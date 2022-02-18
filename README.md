@@ -13,7 +13,7 @@
 To run the supervised class-incremental experiment, run
 
 ```bash
-python sup_train.py hparams/sup_train.yaml --data_folder <YOUR_DATA_FOLDER> --output_folder <YOUR_OUTPUT_FOLDER>
+python sup_train.py hparams/sup_train.yaml --data_folder <YOUR_DATA_FOLDER> --output_base <YOUR_OUTPUT_FOLDER>
 ```
 
 To run the supervised offline training (full dataset at once), replace the arguments of `task_classes` in `hparams/sup_train.yaml` with
@@ -35,11 +35,11 @@ You may want to checkout the following configurations in the hyperparameter yaml
 Similar to the settings in the supervised training, to run experiments with SimSiam as a self-supervised method, run
 
 ```bash
-python simsiam_train.py hparams/simsiam_train.yaml --data_folder <YOUR_DATA_FOLDER> --output_folder <YOUR_OUTPUT_FOLDER>
+python simsiam_train.py hparams/simsiam_train.yaml --data_folder <YOUR_DATA_FOLDER> --output_base <YOUR_OUTPUT_FOLDER>
 ```
 
 To run the linear classification on top of the pretrained models, run
 ```bash
-python linclf_train.py hparams/linclf_train.yaml --data_folder <YOUR_DATA_FOLDER> --output_folder <YOUR_OUTPUT_FOLDER> --ssl_checkpoints_dir <YOUR_SSL_FOLDER>
+python linclf_train.py hparams/linclf_train.yaml --data_folder <YOUR_DATA_FOLDER> --output_base <YOUR_OUTPUT_FOLDER> --ssl_checkpoints_dir <YOUR_SSL_FOLDER>
 ```
 Make sure the `YOUR_SSL_FOLDER` ends with the `save` directory, as the file will redirect under the `save` directory to look for the proper checkpoint for each individual task.

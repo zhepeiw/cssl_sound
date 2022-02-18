@@ -61,7 +61,8 @@ valid_dataloader_opts:
 
 experiment_name: linclf
 # output_folder: !ref results/<experiment_name>/<seed>
-output_folder: !ref /mnt/data/zhepei/outputs/cssl_sound/offline/<time_stamp>_seed_<seed>+<experiment_name>
+output_base: !ref /mnt/data/zhepei/outputs/cssl_sound/tdnn_linclf
+output_folder: !ref <output_base>/<time_stamp>_seed_<seed>+<experiment_name>
 train_log: !ref <output_folder>/train_log.txt
 save_folder: !ref <output_folder>/save
 

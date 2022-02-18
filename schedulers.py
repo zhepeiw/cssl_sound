@@ -74,7 +74,12 @@ class SimSiamCosineScheduler:
 
     @checkpoints.mark_as_saver
     def save(self, path):
-        data = {"n_steps": self.n_steps}
+        data = {
+            "base_lr": self.base_lr,
+            "warmup_lr_schedule": self.warmup_lr_schedule,
+            "cosine_lr_schedule": self.cosine_lr_schedule,
+            "n_steps": self.n_steps
+        }
         torch.save(data, path)
 
     @checkpoints.mark_as_loader
@@ -83,6 +88,9 @@ class SimSiamCosineScheduler:
         del device  # Unused here
         data = torch.load(path)
         self.n_steps = data["n_steps"]
+        self.base_lr = data["base_lr"]
+        self.warmup_lr_schedule = data["warmup_lr_schedule"]
+        self.cosine_lr_schedule = data["cosine_lr_schedule"]
 
 
 if __name__ == "__main__":

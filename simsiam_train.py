@@ -12,13 +12,13 @@ from speechbrain.utils.distributed import run_on_main
 from dataset.prepare_urbansound8k import prepare_split_urbansound8k_csv
 from tqdm import tqdm
 from sklearn.metrics import confusion_matrix
-import numpy as np
 import wandb
 from confusion_matrix_fig import create_cm_fig
 from dataset.cl_pipeline import (
     prepare_task_csv_from_replay,
     mixup_dataio_ssl_prep,
 )
+from schedulers import SimSiamCosineScheduler
 
 import pdb
 
@@ -396,6 +396,15 @@ if __name__ == "__main__":
             hparams['checkpointer'] = hparams['prev_checkpointer']
             hparams['checkpointer'].add_recoverables(hparams['recoverables'])
             # TODO: restore any external buffer for data generation here
+            if task_idx > 0:
+                replay_path = os.path.join(
+                    hparams['save_folder'],
+                    'task{}'.format(task_idx-1),
+                    'replay.pt'
+                )
+                if os.path.exists(replay_path):
+                    replay = torch.load(replay_path)
+            print("==> Resuming from interrupted checkpointer at {}".format(hparams['checkpointer'].checkpoints_dir))
             hparams['resume_interrupt'] = False
 
         # TODO: generate task-wise data
@@ -418,6 +427,17 @@ if __name__ == "__main__":
                 os.path.join(hparams['save_folder'], 'train_task{}_replay.csv'.format(task_idx)),
                 label_encoder,
             )
+        # lr scheduler setups rely on task-wise dataloader
+        if isinstance(hparams['lr_scheduler'], SimSiamCosineScheduler):
+            steps_per_epoch = \
+                    int(np.ceil(len(train_data) / hparams['batch_size']))
+            hparams['lr_scheduler_fn'].keywords['steps_per_epoch'] = \
+                    steps_per_epoch
+            hparams['recoverables']['lr_scheduler'] = \
+                    hparams['lr_scheduler'] = hparams['lr_scheduler_fn']()
+            hparams['checkpointer'].add_recoverables(hparams['recoverables'])
+            print('==> Adjusting scheduler for {} steps at {}'.format(
+                steps_per_epoch, hparams['checkpointer'].checkpoints_dir))
 
         brain = SimSiam(
             modules=hparams["modules"],
@@ -434,4 +454,16 @@ if __name__ == "__main__":
             train_loader_kwargs=hparams["train_dataloader_opts"],
         )
 
+        brain.on_evaluate_start(min_key='loss')
+
+        if num_tasks > 1:
+            # global buffer
+            torch.save(
+                replay,
+                os.path.join(
+                    hparams['save_folder'],
+                    'task{}'.format(task_idx),
+                    'replay.pt'
+                )
+            )
         hparams['prev_checkpointer'] = hparams['checkpointer']
