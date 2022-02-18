@@ -454,6 +454,7 @@ if __name__ == "__main__":
             train_loader_kwargs=hparams["train_dataloader_opts"],
         )
 
+        brain.checkpointer.recoverables.pop('datapoint_counter')
         brain.on_evaluate_start(min_key='loss')
 
         if num_tasks > 1:
