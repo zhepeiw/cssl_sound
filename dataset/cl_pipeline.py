@@ -23,11 +23,14 @@ def prepare_task_csv_from_replay(
     rng = np.random.RandomState(1234)
     df = pd.read_csv(input_csv, index_col=None)
     curr_data = df.to_dict('records')
-    curr_buffer = rng.choice(
-        curr_data,
-        min(num_keep, len(curr_data)),
-        replace=False
-    ).tolist()
+    if num_keep == 'all':
+        curr_buffer = curr_data
+    else:
+        curr_buffer = rng.choice(
+            curr_data,
+            min(num_keep, len(curr_data)),
+            replace=False
+        ).tolist()
     df_agg = pd.DataFrame(curr_data + buffer)
     df_agg['ID'] = np.arange(len(df_agg))
     df_agg.to_csv(input_csv.replace('raw', 'replay'), index=False)

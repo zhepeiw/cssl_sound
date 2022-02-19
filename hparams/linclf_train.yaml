@@ -15,14 +15,14 @@ resume_task_idx: 0
 time_stamp: placeholder
 
 # cont learning setup
-# task_classes:
-#   - !tuple (0, 1)
-#   - !tuple (2, 3)
-#   - !tuple (4, 5)
-#   - !tuple (6, 7)
-#   - !tuple (8, 9)
 task_classes:
-    - !tuple (0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+  - !tuple (0, 1)
+  - !tuple (2, 3)
+  - !tuple (4, 5)
+  - !tuple (6, 7)
+  - !tuple (8, 9)
+# task_classes:
+#     - !tuple (0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 replay_num_keep: all
 
 use_mixup: False
@@ -101,13 +101,13 @@ mean_var_norm: !new:speechbrain.processing.features.InputNormalization
     norm_type: sentence
     std_norm: False
 
-# embedding_model: !new:models.tdnn.ECAPA_TDNN
-#     input_size: !ref <n_mels>
-#     channels: [1024, 1024, 1024, 1024, 3072]
-#     kernel_sizes: [5, 3, 3, 3, 1]
-#     dilations: [1, 2, 3, 4, 1]
-#     attention_channels: 128
-#     lin_neurons: !ref <emb_dim>
+embedding_model: !new:models.tdnn.ECAPA_TDNN
+    input_size: !ref <n_mels>
+    channels: [1024, 1024, 1024, 1024, 3072]
+    kernel_sizes: [5, 3, 3, 3, 1]
+    dilations: [1, 2, 3, 4, 1]
+    attention_channels: 128
+    lin_neurons: !ref <emb_dim>
 # embedding_model: !new:models.tdnn.ECAPA_TDNN
 #     input_size: !ref <n_mels>
 #     channels: [512, 512, 512, 1024]
@@ -115,9 +115,9 @@ mean_var_norm: !new:speechbrain.processing.features.InputNormalization
 #     dilations: [1, 2, 3, 1]
 #     attention_channels: 128
 #     lin_neurons: !ref <emb_dim>
-embedding_model: !new:models.pann.Cnn14
-    mel_bins: !ref <n_mels>
-    emb_dim: !ref <emb_dim>
+# embedding_model: !new:models.pann.Cnn14
+#     mel_bins: !ref <n_mels>
+#     emb_dim: !ref <emb_dim>
 
 # classifier_fn: !name:speechbrain.lobes.models.ECAPA_TDNN.Classifier
 #     input_size: !ref <emb_dim>
@@ -182,7 +182,7 @@ prev_checkpointer: null
 # prev_checkpointer: !new:speechbrain.utils.checkpoints.Checkpointer
 #     checkpoints_dir: !PLACEHOLDER
 
-ssl_checkpoints_dir: "/mnt/data/zhepei/outputs/cssl_sound/offline/2022-02-17+18-44-34_seed_1234+cnn1_sim_fold1/save"
+ssl_checkpoints_dir: "/mnt/data/zhepei/outputs/cssl_sound/tdnn_simsiam/2022-02-18+05-11-32_seed_1234+rep200_sim_nomixup_fold1/save"
 
 train_logger: !new:speechbrain.utils.train_logger.FileTrainLogger
     save_file: !ref <train_log>
