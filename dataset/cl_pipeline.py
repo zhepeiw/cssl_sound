@@ -67,6 +67,18 @@ def prepare_task_csv_for_linclf(
     return curr_buffer
 
 
+def prepare_concat_csv(
+    input_csvs,
+    task_idx,
+    train_type,
+):
+    all_data = [pd.read_csv(path, index_col=None).to_dict('records') for path in input_csvs]
+    all_data = [item for sublist in all_data for item in sublist]
+    df_agg = pd.DataFrame(all_data)
+    df_agg['ID'] = np.arange(len(df_agg))
+    df_agg.to_csv(input_csvs[0].replace('task0_raw', 'task{}_{}'.format(task_idx, train_type)), index=False)
+
+
 def mixup_dataio_prep(
     hparams,
     csv_path,

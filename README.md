@@ -38,8 +38,19 @@ Similar to the settings in the supervised training, to run experiments with SimS
 python simsiam_train.py hparams/simsiam_train.yaml --data_folder <YOUR_DATA_FOLDER> --output_base <YOUR_OUTPUT_FOLDER>
 ```
 
-To run the linear classification on top of the pretrained models, run
+
+### Linear Evaluation
+To run the linear classification on top of the frozen pretrained models, run
 ```bash
-python linclf_train.py hparams/linclf_train.yaml --data_folder <YOUR_DATA_FOLDER> --output_base <YOUR_OUTPUT_FOLDER> --ssl_checkpoints_dir <YOUR_SSL_FOLDER>
+python linclf_train.py hparams/linclf_train.yaml --linclf_train_type buffer --data_folder <YOUR_DATA_FOLDER> --output_base <YOUR_OUTPUT_FOLDER> --ssl_checkpoints_dir <YOUR_SSL_FOLDER>
 ```
 Make sure the `YOUR_SSL_FOLDER` ends with the `save` directory, as the file will redirect under the `save` directory to look for the proper checkpoint for each individual task.
+
+We follow the paradigms in the [Co2L](https://arxiv.org/pdf/2106.14413.pdf), we implement three scenarios for training the linear classifier. By default, we train the linear classifier with all data from the current task along with the replay buffer from previous tasks with the `--linclf_train_type buffer` flag (class-balanced sampling still WIP).
+
+To investigate the tendency for catastrophic forgetting on the algorithms, we pick the embeddings learned without any handling of continual learning (no buffer, finetuning with data only from the current task). Then, we train the linear classifier with the flag `--linclf_train_type seen`, which trains the linear classifier with all data samples from the first to the current task (equivalent to a full buffer).
+
+To evaluate whether the representation learned is useful for future tasks, we train the classifier with the flag `--linclf_train_tyep full`, which trains the classifier with data samples from all tasks on top of the embedder at each task.
+
+
+To train with an synthetically ideal dataset with all samples from the first till the current task on the frozen embedding, use the value `--linclf_train_type seen`. To train with all samples for all tasks, use `--linclf_train_type full`.

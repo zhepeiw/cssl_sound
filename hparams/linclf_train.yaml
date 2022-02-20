@@ -15,6 +15,7 @@ resume_task_idx: 0
 time_stamp: placeholder
 
 # cont learning setup
+linclf_train_type: buffer
 task_classes:
   - !tuple (0, 1)
   - !tuple (2, 3)
@@ -182,7 +183,7 @@ prev_checkpointer: null
 # prev_checkpointer: !new:speechbrain.utils.checkpoints.Checkpointer
 #     checkpoints_dir: !PLACEHOLDER
 
-ssl_checkpoints_dir: "/mnt/data/zhepei/outputs/cssl_sound/tdnn_simsiam/2022-02-18+05-11-32_seed_1234+rep200_sim_nomixup_fold1/save"
+ssl_checkpoints_dir: "/mnt/data/zhepei/outputs/cssl_sound/tdnn_sup/2022-02-18+03-43-14_seed_1234+finetune_nomixup_fold1/save"
 
 train_logger: !new:speechbrain.utils.train_logger.FileTrainLogger
     save_file: !ref <train_log>

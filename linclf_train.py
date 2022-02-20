@@ -17,6 +17,7 @@ import wandb
 from confusion_matrix_fig import create_cm_fig
 from dataset.cl_pipeline import (
     prepare_task_csv_for_linclf,
+    prepare_concat_csv,
     mixup_dataio_prep,
 )
 from schedulers import SimSiamCosineScheduler
@@ -527,6 +528,12 @@ if __name__ == "__main__":
     num_tasks = len(hparams['task_classes'])
     brain = None
     test_datasets = [dataio_prep(hparams, os.path.join(hparams['save_folder'], 'test_task{}_raw.csv'.format(tt)), label_encoder) for tt in range(num_tasks)]
+    # this is for linclf evaluation with ideal data case
+    if hparams['linclf_train_type'] == 'full':
+        for split in ['train', 'valid']:
+            prepare_concat_csv(
+                [os.path.join(hparams['save_folder'], '{}_task{}_raw.csv'.format(split, tt)) for tt in range(num_tasks)], 'all', hparams['linclf_train_type']
+            )
     # all buffers
     replay = {'train': [], 'valid': []}
     cl_acc_table = np.zeros((num_tasks, num_tasks))
@@ -601,36 +608,63 @@ if __name__ == "__main__":
         print("==> Recovering embedder checkpointer at {}".format(ssl_checkpointer.checkpoints_dir))
 
         # TODO: generate task-wise data
-        curr_train_replay = prepare_task_csv_for_linclf(
-            os.path.join(hparams['save_folder'], 'train_task{}_raw.csv'.format(task_idx)),
-            replay['train'],
-            hparams['replay_num_keep'],
-        )
-        replay['train'] += curr_train_replay
-        if hparams['use_mixup']:
-            train_data = mixup_dataio_prep(
-                hparams,
+        if hparams['linclf_train_type']  == 'buffer':
+            curr_train_replay = prepare_task_csv_for_linclf(
                 os.path.join(hparams['save_folder'], 'train_task{}_raw.csv'.format(task_idx)),
-                label_encoder,
                 replay['train'],
+                hparams['replay_num_keep'],
             )
-        else:
+            replay['train'] += curr_train_replay
+            if hparams['use_mixup']:
+                train_data = mixup_dataio_prep(
+                    hparams,
+                    os.path.join(hparams['save_folder'], 'train_task{}_raw.csv'.format(task_idx)),
+                    label_encoder,
+                    replay['train'],
+                )
+            else:
+                train_data = dataio_prep(
+                    hparams,
+                    os.path.join(hparams['save_folder'], 'train_task{}_linclf.csv'.format(task_idx)),
+                    label_encoder,
+                )
+            curr_valid_replay = prepare_task_csv_for_linclf(
+                os.path.join(hparams['save_folder'], 'valid_task{}_raw.csv'.format(task_idx)),
+                replay['valid'],
+                'all',
+            )
+            replay['valid'] += curr_valid_replay
+            valid_data = dataio_prep(
+                hparams,
+                os.path.join(hparams['save_folder'], 'valid_task{}_linclf.csv'.format(task_idx)),
+                label_encoder,
+            )
+        elif hparams['linclf_train_type'] == 'seen':
+            for split in ['train', 'valid']:
+                prepare_concat_csv(
+                    [os.path.join(hparams['save_folder'], '{}_task{}_raw.csv'.format(split, tt)) for tt in range(task_idx+1)], task_idx, hparams['linclf_train_type']
+                )
             train_data = dataio_prep(
                 hparams,
-                os.path.join(hparams['save_folder'], 'train_task{}_linclf.csv'.format(task_idx)),
+                os.path.join(hparams['save_folder'], 'train_task{}_seen.csv'.format(task_idx)),
                 label_encoder,
             )
-        curr_valid_replay = prepare_task_csv_for_linclf(
-            os.path.join(hparams['save_folder'], 'valid_task{}_raw.csv'.format(task_idx)),
-            replay['valid'],
-            'all',
-        )
-        replay['valid'] += curr_valid_replay
-        valid_data = dataio_prep(
-            hparams,
-            os.path.join(hparams['save_folder'], 'valid_task{}_linclf.csv'.format(task_idx)),
-            label_encoder,
-        )
+            valid_data = dataio_prep(
+                hparams,
+                os.path.join(hparams['save_folder'], 'valid_task{}_seen.csv'.format(task_idx)),
+                label_encoder,
+            )
+        elif hparams['linclf_train_type'] == 'full':
+            train_data = dataio_prep(
+                hparams,
+                os.path.join(hparams['save_folder'], 'train_taskall_full.csv'),
+                label_encoder,
+            )
+            valid_data = dataio_prep(
+                hparams,
+                os.path.join(hparams['save_folder'], 'valid_taskall_full.csv'),
+                label_encoder,
+            )
 
         # lr scheduler setups rely on task-wise dataloader
         if isinstance(hparams['lr_scheduler'], SimSiamCosineScheduler):
@@ -671,12 +705,20 @@ if __name__ == "__main__":
 
         else:
             # multitask evaluation up to the current task
-            test_stats = brain.evaluate_multitask(
-                test_datasets[:task_idx+1],
-                max_key='acc',
-                test_loader_kwargs=hparams['valid_dataloader_opts']
-            )
-            cl_acc_table[task_idx, :task_idx+1] = test_stats['acc']
+            if hparams['linclf_train_type'] in ['seen', 'buffer']:
+                test_stats = brain.evaluate_multitask(
+                    test_datasets[:task_idx+1],
+                    max_key='acc',
+                    test_loader_kwargs=hparams['valid_dataloader_opts']
+                )
+                cl_acc_table[task_idx, :task_idx+1] = test_stats['acc']
+            elif hparams['linclf_train_type'] == 'full':
+                test_stats = brain.evaluate_multitask(
+                    test_datasets,
+                    max_key='acc',
+                    test_loader_kwargs=hparams['valid_dataloader_opts']
+                )
+                cl_acc_table[task_idx] = test_stats['acc']
             # global buffer
             torch.save(
                 test_stats,
