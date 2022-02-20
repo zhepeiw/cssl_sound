@@ -52,5 +52,3 @@ To investigate the tendency for catastrophic forgetting on the algorithms, we pi
 
 To evaluate whether the representation learned is useful for future tasks, we train the classifier with the flag `--linclf_train_tyep full`, which trains the classifier with data samples from all tasks on top of the embedder at each task.
 
-
-To train with an synthetically ideal dataset with all samples from the first till the current task on the frozen embedding, use the value `--linclf_train_type seen`. To train with all samples for all tasks, use `--linclf_train_type full`.
