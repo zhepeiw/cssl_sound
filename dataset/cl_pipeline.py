@@ -10,7 +10,7 @@ import pdb
 def prepare_task_csv_from_replay(
     input_csv,
     buffer,
-    num_keep
+    num_keep='all',
 ):
     '''
         prepare csv for each task with a rehearsal buffer
@@ -249,3 +249,82 @@ def mixup_dataio_ssl_prep(
     )
 
     return ds
+
+
+def class_balanced_dataio_prep(
+    hparams,
+    csv_path,
+    label_encoder
+):
+    "Creates the datasets and their data processing pipelines."
+
+    config_sample_rate = hparams["sample_rate"]
+    # TODO  use SB implementation but need to make sure it give the same results as PyTorch
+    # resampler = sb.processing.speech_augmentation.Resample(orig_freq=latest_file_sr, new_freq=config_sample_rate)
+    hparams["resampler"] = torchaudio.transforms.Resample(
+        new_freq=config_sample_rate
+    )
+
+    class_dict = get_class_dict(pd.read_csv(csv_path, index_col=None))
+    class_keys = list(class_dict.keys())
+
+    # 2. Define audio pipeline:
+    @sb.utils.data_pipeline.takes("wav_path")
+    @sb.utils.data_pipeline.provides("sig", "class_string_encoded", "sample_id")
+    def audio_label_pipeline(wav_path):
+        """Load the signal, and pass it and its length to the corruption class.
+        This is done on the CPU in the `collate_fn`."""
+        class_name = hparams['np_rng'].choice(class_keys, size=1)[0]
+        info = hparams['np_rng'].choice(class_dict[class_name])
+        wav_path = info['wav_path']
+        sig, read_sr = torchaudio.load(wav_path)
+
+        # If multi-channels, downmix it to a mono channel
+        sig = torch.squeeze(sig)
+        if len(sig.shape) > 1:
+            sig = torch.mean(sig, dim=0)
+
+        # Convert sample rate to required config_sample_rate
+        if read_sr != config_sample_rate:
+            # Re-initialize sampler if source file sample rate changed compared to last file
+            if read_sr != hparams["resampler"].orig_freq:
+                hparams["resampler"] = torchaudio.transforms.Resample(
+                    orig_freq=read_sr, new_freq=config_sample_rate
+                )
+            # Resample audio
+            sig = hparams["resampler"].forward(sig)
+        # scaling
+        max_amp = torch.abs(sig).max().item()
+        #  assert max_amp > 0
+        scaling = 1 / max_amp * 0.9
+        sig = scaling * sig
+        yield sig
+        class_string_encoded = label_encoder.encode_label_torch(class_name)
+        yield class_string_encoded
+        yield info['ID']
+
+
+    # Define datasets. We also connect the dataset with the data processing
+    # functions defined above.
+    ds = sb.dataio.dataset.DynamicItemDataset.from_csv(
+        csv_path=csv_path,
+        dynamic_items=[audio_label_pipeline],
+        output_keys=["id", "sig", "class_string_encoded", "sample_id"]
+    )
+
+    return ds
+
+
+def get_class_dict(df):
+    '''
+        returns the mapping from class to data info
+    '''
+    class2info_dict = {}
+    curr_data = df.to_dict('records')
+    for info in curr_data:
+        class_name = info['class_name']
+        if class_name not in class2info_dict:
+            class2info_dict[class_name] = []
+        class2info_dict[class_name].append(info)
+    return class2info_dict
+

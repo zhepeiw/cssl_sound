@@ -16,9 +16,11 @@ from sklearn.metrics import confusion_matrix
 import wandb
 from confusion_matrix_fig import create_cm_fig
 from dataset.cl_pipeline import (
-    prepare_task_csv_for_linclf,
+    #  prepare_task_csv_for_linclf,
+    prepare_task_csv_from_replay,
     prepare_concat_csv,
-    mixup_dataio_prep,
+    #  mixup_dataio_prep,
+    class_balanced_dataio_prep,
 )
 from schedulers import SimSiamCosineScheduler
 
@@ -609,26 +611,27 @@ if __name__ == "__main__":
 
         # TODO: generate task-wise data
         if hparams['linclf_train_type']  == 'buffer':
-            curr_train_replay = prepare_task_csv_for_linclf(
+            curr_train_replay = prepare_task_csv_from_replay(
                 os.path.join(hparams['save_folder'], 'train_task{}_raw.csv'.format(task_idx)),
                 replay['train'],
                 hparams['replay_num_keep'],
             )
             replay['train'] += curr_train_replay
             if hparams['use_mixup']:
-                train_data = mixup_dataio_prep(
-                    hparams,
-                    os.path.join(hparams['save_folder'], 'train_task{}_raw.csv'.format(task_idx)),
-                    label_encoder,
-                    replay['train'],
-                )
+                raise ValueError("mixup not allowed in linclf")
+                #  train_data = mixup_dataio_prep(
+                #      hparams,
+                #      os.path.join(hparams['save_folder'], 'train_task{}_raw.csv'.format(task_idx)),
+                #      label_encoder,
+                #      replay['train'],
+                #  )
             else:
-                train_data = dataio_prep(
+                train_data = class_balanced_dataio_prep(
                     hparams,
-                    os.path.join(hparams['save_folder'], 'train_task{}_linclf.csv'.format(task_idx)),
+                    os.path.join(hparams['save_folder'], 'train_task{}_replay.csv'.format(task_idx)),
                     label_encoder,
                 )
-            curr_valid_replay = prepare_task_csv_for_linclf(
+            curr_valid_replay = prepare_task_csv_from_replay(
                 os.path.join(hparams['save_folder'], 'valid_task{}_raw.csv'.format(task_idx)),
                 replay['valid'],
                 'all',
@@ -636,9 +639,10 @@ if __name__ == "__main__":
             replay['valid'] += curr_valid_replay
             valid_data = dataio_prep(
                 hparams,
-                os.path.join(hparams['save_folder'], 'valid_task{}_linclf.csv'.format(task_idx)),
+                os.path.join(hparams['save_folder'], 'valid_task{}_replay.csv'.format(task_idx)),
                 label_encoder,
             )
+        # ideal evaluation with all seen data
         elif hparams['linclf_train_type'] == 'seen':
             for split in ['train', 'valid']:
                 prepare_concat_csv(
@@ -654,6 +658,7 @@ if __name__ == "__main__":
                 os.path.join(hparams['save_folder'], 'valid_task{}_seen.csv'.format(task_idx)),
                 label_encoder,
             )
+        # ideal evaluation with all seen and future data
         elif hparams['linclf_train_type'] == 'full':
             train_data = dataio_prep(
                 hparams,
