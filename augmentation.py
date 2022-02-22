@@ -45,21 +45,21 @@ class TFAugmentation(nn.Module):
             x: [batch, time, freq]
         '''
         with torch.no_grad():
-            x = self.specaugment(x)
+            x = self.specaugment(x.clone())
             # circular shift in time
             if self.time_roll:
                 roll_offset = torch.randint(self.time_roll_limit[0], self.time_roll_limit[1]+1, (1,)).item()
                 x = torch.roll(x, roll_offset, 1)
             # truncated shift in frequency
             if self.freq_shift:
-                shift_offset = torch.randint(self.freq_shift_limit[0], self.freq_shift_limit[1], (1,)).item()
+                shift_offset = torch.randint(self.freq_shift_limit[0], self.freq_shift_limit[1]+1, (1,)).item()
+                x = torch.roll(x, shift_offset, 2)
                 if shift_offset > 0:
-                    x[:, :, shift_offset:] = x[:, :, :-shift_offset]
+                    #  x[:, :, shift_offset:] = x[:, :, :-shift_offset]
                     x[:, :, :shift_offset] = 0
                 elif shift_offset < 0:
-                    x[:, :, :shift_offset] = x[:, :, -shift_offset:]
+                    #  x[:, :, :shift_offset] = x[:, :, -shift_offset:]
                     x[:, :, shift_offset:] = 0
-
         return x
 
 

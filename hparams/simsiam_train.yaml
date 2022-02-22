@@ -111,7 +111,7 @@ spec_domain_aug: !new:augmentation.TFAugmentation
     time_roll: !ref <use_time_roll>
     time_roll_limit: !tuple (0, 200)
     freq_shift: !ref <use_freq_shift>
-    freq_shift_limit: !tuple (-20, 20)
+    freq_shift_limit: !tuple (-10, 10)
 
 
 # Functions
