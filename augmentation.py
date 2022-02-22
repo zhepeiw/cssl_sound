@@ -17,6 +17,10 @@ class TFAugmentation(nn.Module):
         time_mask_width=(0, 100),
         n_time_mask=2,
         replace_with_zero=True,
+        time_roll=True,
+        time_roll_limit=(0, 200),
+        freq_shift=True,
+        freq_shift_limit=(-20, 20),
     ):
         super().__init__()
         self.specaugment = augment.SpecAugment(
@@ -31,8 +35,31 @@ class TFAugmentation(nn.Module):
             n_time_mask=n_time_mask,
             replace_with_zero=replace_with_zero
         )
+        self.time_roll = time_roll
+        self.time_roll_limit = time_roll_limit
+        self.freq_shift = freq_shift
+        self.freq_shift_limit = freq_shift_limit
+
     def forward(self, x, lens):
-        x = self.specaugment(x)
+        '''
+            x: [batch, time, freq]
+        '''
+        with torch.no_grad():
+            x = self.specaugment(x)
+            # circular shift in time
+            if self.time_roll:
+                roll_offset = torch.randint(self.time_roll_limit[0], self.time_roll_limit[1]+1, (1,)).item()
+                x = torch.roll(x, roll_offset, 1)
+            # truncated shift in frequency
+            if self.freq_shift:
+                shift_offset = torch.randint(self.freq_shift_limit[0], self.freq_shift_limit[1], (1,)).item()
+                if shift_offset > 0:
+                    x[:, :, shift_offset:] = x[:, :, :-shift_offset]
+                    x[:, :, :shift_offset] = 0
+                elif shift_offset < 0:
+                    x[:, :, :shift_offset] = x[:, :, -shift_offset:]
+                    x[:, :, shift_offset:] = 0
+
         return x
 
 

@@ -82,6 +82,8 @@ win_length: 25
 hop_length: 10
 n_fft: !ref <win_length> * <sample_rate> // 1000
 f_min: 0
+use_time_roll: False
+use_freq_shift: False
 # Number of classes
 n_classes: 10
 emb_dim: 2048
@@ -106,6 +108,11 @@ spec_domain_aug: !new:augmentation.TFAugmentation
     time_mask_width: !tuple (0, 10)
     n_time_mask: 2
     replace_with_zero: True
+    time_roll: !ref <use_time_roll>
+    time_roll_limit: !tuple (0, 200)
+    freq_shift: !ref <use_freq_shift>
+    freq_shift_limit: !tuple (-20, 20)
+
 
 # Functions
 compute_features: !new:speechbrain.lobes.features.Fbank
