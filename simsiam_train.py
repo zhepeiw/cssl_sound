@@ -419,7 +419,6 @@ if __name__ == "__main__":
                 hparams,
                 os.path.join(hparams['save_folder'], 'train_task{}_replay.csv'.format(task_idx)),
                 label_encoder,
-                replay['train'],
             )
         else:
             train_data = dataio_ssl_prep(
