@@ -1,0 +1,78 @@
+# File              : sup_train.yaml
+# Author            : Zhepei Wang <zhepeiw2@illinois.edu>
+# Date              : 27.01.2022
+# Last Modified Date: 27.01.2022
+# Last Modified By  : Zhepei Wang <zhepeiw2@illinois.edu>
+
+seed: 1234
+__set_seed: !apply:torch.manual_seed [!ref <seed>]
+np_rng: !new:numpy.random.RandomState [!ref <seed>]
+
+
+# Training parameters
+batch_size: 32
+# dataset
+sample_rate: 16000
+label_encoder_path: "./dataset/label_encoder.txt"
+
+csv_path:
+  train: '/mnt/data/zhepei/outputs/cssl_sound/offline/2022-02-17+06-34-39_seed_1234+sys1_sup_fold1/save/train_task0_replay.csv'
+  test: '/mnt/data/zhepei/outputs/cssl_sound/offline/2022-02-17+06-34-39_seed_1234+sys1_sup_fold1/save/test_task0_raw.csv'
+
+
+# train_dataloader_opts:
+#   batch_size: !ref <batch_size>
+#   num_workers: 8
+#   shuffle: True
+#   # drop_last: True
+
+valid_dataloader_opts:
+  batch_size: 32
+  num_workers: 8
+
+# Experiment params
+auto_mix_prec: True # Set it to True for mixed precision
+
+# Feature parameters
+n_mels: 80
+left_frames: 0
+right_frames: 0
+deltas: False
+amp_to_db: False
+normalize: True
+win_length: 25
+hop_length: 10
+n_fft: !ref <win_length> * <sample_rate> // 1000
+f_min: 0
+# Number of classes
+n_classes: 10
+emb_dim: 2048
+
+# Functions
+compute_features: !new:speechbrain.lobes.features.Fbank
+    n_mels: !ref <n_mels>
+    left_frames: !ref <left_frames>
+    right_frames: !ref <right_frames>
+    deltas: !ref <deltas>
+    sample_rate: !ref <sample_rate>
+    n_fft: !ref <n_fft>
+    win_length: !ref <win_length>
+    hop_length: !ref <hop_length>
+    f_min: !ref <f_min>
+
+mean_var_norm: !new:speechbrain.processing.features.InputNormalization
+    norm_type: sentence
+    std_norm: False
+
+embedding_model: !new:models.tdnn.ECAPA_TDNN
+    input_size: !ref <n_mels>
+    channels: [1024, 1024, 1024, 1024, 3072]
+    kernel_sizes: [5, 3, 3, 3, 1]
+    dilations: [1, 2, 3, 4, 1]
+    attention_channels: 128
+    lin_neurons: !ref <emb_dim>
+
+
+ssl_checkpoints_dir: "/mnt/data/zhepei/outputs/cssl_sound/tdnn_simsiam/2022-02-23+18-21-36_seed_1234+rep100_mixup_fold1/save"
+# ssl_checkpoints_dir: "/mnt/data/zhepei/outputs/cssl_sound/tdnn_sup/2022-02-18+03-43-14_seed_1234+finetune_nomixup_fold1/save"
+
