@@ -23,6 +23,7 @@ from dataset.cl_pipeline import (
     class_balanced_dataio_prep,
 )
 from schedulers import SimSiamCosineScheduler
+from cl_table_tools import compute_cl_statistics
 
 import pdb
 
@@ -742,7 +743,6 @@ if __name__ == "__main__":
             )
             print("\n {} \n".format(cl_acc_table))
             if task_idx == num_tasks - 1:
-                from cl_table_tools import compute_cl_statistics
                 print(compute_cl_statistics(cl_acc_table))
             torch.save(
                 replay,

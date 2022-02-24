@@ -10,7 +10,7 @@ def compute_cl_statistics(table):
     '''
     avg_acc = np.mean(table[-1])
     forgetting = np.max(table - table[-1][None, :], axis=0)
-    avg_fgt = forgetting.mean()
+    avg_fgt = forgetting[:-1].mean()
     avg_seen_acc = np.mean(table[np.tril_indices(table.shape[0], -1)])  # off diagonal lower triangle, evaluating all past tasks
     avg_full_transfer_acc = np.mean(table[np.triu_indices(table.shape[0], 1)])
     report = {
