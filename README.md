@@ -52,3 +52,9 @@ To investigate the tendency for catastrophic forgetting on the algorithms, we pi
 
 To evaluate whether the representation learned is useful for future tasks, we train the classifier with the flag `--linclf_train_tyep full`, which trains the classifier with data samples from all tasks on top of the embedder at each task.
 
+
+### Visualization
+We provide a notebook for visualizing the learned embeddings for continually trained embedding models. Please configure the following in `hparams/visualize.yaml`:
+
+  - 'csv_path': this is for loading the training and test data, and we recommend loading the offline dataset with all tasks
+  - 'ssl_checkpoints_dir': same as in linear evaluation
