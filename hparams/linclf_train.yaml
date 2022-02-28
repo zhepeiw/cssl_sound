@@ -5,7 +5,7 @@
 # Last Modified By  : Zhepei Wang <zhepeiw2@illinois.edu>
 
 
-seed: 1234
+seed: 2022
 __set_seed: !apply:torch.manual_seed [!ref <seed>]
 np_rng: !new:numpy.random.RandomState [!ref <seed>]
 
@@ -47,7 +47,7 @@ data_folder: "/mnt/data/Sound Sets/UrbanSound8K/UrbanSound8K"
 train_folds: [1, 2, 3, 4, 5, 6, 7, 8]
 valid_folds: [9]
 test_folds: [10]
-label_encoder_path: "./dataset/label_encoder.txt"
+label_encoder_path: "./dataset/label_encoder_us8k_ordered.txt"
 
 train_dataloader_opts:
   batch_size: !ref <batch_size>
@@ -62,7 +62,7 @@ valid_dataloader_opts:
 
 experiment_name: linclf
 # output_folder: !ref results/<experiment_name>/<seed>
-output_base: !ref /mnt/data/zhepei/outputs/cssl_sound/tdnn_linclf
+output_base: /mnt/data/zhepei/outputs/cssl_sound/tdnn_linclf
 output_folder: !ref <output_base>/<time_stamp>_seed_<seed>+<experiment_name>
 train_log: !ref <output_folder>/train_log.txt
 save_folder: !ref <output_folder>/save
@@ -183,7 +183,7 @@ prev_checkpointer: null
 # prev_checkpointer: !new:speechbrain.utils.checkpoints.Checkpointer
 #     checkpoints_dir: !PLACEHOLDER
 
-ssl_checkpoints_dir: "/mnt/data/zhepei/outputs/cssl_sound/tdnn_simsiam/2022-02-22+17-33-40_seed_1234+rep100_trfs_fold1/save"
+ssl_checkpoints_dir: "/mnt/data/zhepei/outputs/cssl_sound/tdnn_supsiam_rep100/2022-02-26+21-55-19_seed_1234+sup100_ssl000_fold1/save"
 
 train_logger: !new:speechbrain.utils.train_logger.FileTrainLogger
     save_file: !ref <train_log>

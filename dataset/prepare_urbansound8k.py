@@ -53,9 +53,9 @@ def prepare_split_urbansound8k_csv(
         fname = os.path.join(root_dir, 'audio', 'fold{}'.format(fold), row['slice_file_name'])
         if fold in train_folds:
             train_splits[class2task[class_id]].append((fname, class_id, class_name))
-        elif fold in valid_folds:
+        if fold in valid_folds:
             valid_splits[class2task[class_id]].append((fname, class_id, class_name))
-        else:
+        if fold in test_folds:
             test_splits[class2task[class_id]].append((fname, class_id, class_name))
     # training csv for each task
     for split, split_data in zip(['train', 'valid', 'test'], [train_splits, valid_splits, test_splits]):

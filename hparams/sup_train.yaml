@@ -5,7 +5,7 @@
 # Last Modified By  : Zhepei Wang <zhepeiw2@illinois.edu>
 
 
-seed: 1234
+seed: 2022
 __set_seed: !apply:torch.manual_seed [!ref <seed>]
 np_rng: !new:numpy.random.RandomState [!ref <seed>]
 
@@ -48,7 +48,7 @@ data_folder: "/mnt/data/Sound Sets/UrbanSound8K/UrbanSound8K"
 train_folds: [1, 2, 3, 4, 5, 6, 7, 8]
 valid_folds: [9]
 test_folds: [10]
-label_encoder_path: "./dataset/label_encoder.txt"
+label_encoder_path: "./dataset/label_encoder_us8k_ordered.txt"
 
 train_dataloader_opts:
   batch_size: !ref <batch_size>

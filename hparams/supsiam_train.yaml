@@ -1,7 +1,7 @@
-# File              : sup_train.yaml
+# File              : supsiam_train.py
 # Author            : Zhepei Wang <zhepeiw2@illinois.edu>
 # Date              : 27.01.2022
-# Last Modified Date: 27.01.2022
+# Last Modified Date: 25.02.2022
 # Last Modified By  : Zhepei Wang <zhepeiw2@illinois.edu>
 
 
@@ -62,7 +62,7 @@ valid_dataloader_opts:
 
 experiment_name: simsiam
 # output_folder: !ref results/<experiment_name>/<seed>
-output_base: !ref /mnt/data/zhepei/outputs/cssl_sound/tdnn_simsiam
+output_base: /mnt/data/zhepei/outputs/cssl_sound/tdnn_supsiam
 output_folder: !ref <output_base>/<time_stamp>_seed_<seed>+<experiment_name>
 train_log: !ref <output_folder>/train_log.txt
 save_folder: !ref <output_folder>/save
@@ -155,16 +155,25 @@ predictor: !new:models.modules.SimSiamPredictor
     input_size: !ref <emb_dim>
     hidden_size: !ref <emb_dim> // 4
 
+classifier: !new:models.modules.Classifier
+    input_size: !ref <emb_dim>
+    output_size: !ref <n_classes>
+
 modules:
     compute_features: !ref <compute_features>
     embedding_model: !ref <embedding_model>
-    # classifier: !ref <classifier>
+    classifier: !ref <classifier>
     projector: !ref <projector>
     predictor: !ref <predictor>
     mean_var_norm: !ref <mean_var_norm>
 
+ssl_weight: 0.
 compute_simsiam_cost: !new:torch.nn.CosineSimilarity
     dim: 2
+
+sup_weight: 1.
+compute_sup_cost: !new:losses.LogSoftmaxWithProbWrapper
+    loss_fn: !new:torch.nn.Identity
 
 acc_metric: !name:speechbrain.utils.Accuracy.AccuracyStats
 
@@ -202,7 +211,7 @@ checkpointer: !new:speechbrain.utils.checkpoints.Checkpointer
 
 recoverables:
     embedding_model: !ref <embedding_model>
-    # classifier: !ref <classifier>
+    classifier: !ref <classifier>
     projector: !ref <projector>
     predictor: !ref <predictor>
     normalizer: !ref <mean_var_norm>
@@ -225,6 +234,6 @@ wandb_logger_fn: !name:utils.MyWandBLogger
     name: !ref <time_stamp>+seed_<seed>+<experiment_name>
     dir: !ref <output_folder>
     reinit: True
-    yaml_config: hparams/simsiam_train.yaml
+    yaml_config: hparams/supsiam_train.yaml
     resume: False
 
