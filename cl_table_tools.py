@@ -8,12 +8,17 @@ def compute_cl_statistics(table):
     '''
         table[i, j] is the accuracy of task j after being trained on task i
     '''
-    avg_acc = np.mean(table[-1])
+    avg_lep_acc = np.sum(np.tril(table), axis=1) / np.arange(1, table.shape[0]+1)
+    avg_gep_acc = np.mean(table, axis=1)
+    #  avg_acc = np.mean(table[-1])
+    avg_acc = avg_gep_acc[-1]
     forgetting = np.max(table - table[-1][None, :], axis=0)
     avg_fgt = forgetting[:-1].mean()
     avg_seen_acc = np.mean(table[np.tril_indices(table.shape[0], -1)])  # off diagonal lower triangle, evaluating all past tasks
     avg_full_transfer_acc = np.mean(table[np.triu_indices(table.shape[0], 1)])
     report = {
+        'avg_lep_acc': avg_lep_acc,
+        'avg_gep_acc': avg_gep_acc,
         'avg_acc': avg_acc,
         'avg_fgt': avg_fgt,
         'avg_seen': avg_seen_acc,

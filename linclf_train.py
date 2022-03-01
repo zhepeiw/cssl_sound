@@ -552,9 +552,10 @@ if __name__ == "__main__":
             hparams['recoverables']['epoch_counter'] = \
                     hparams['epoch_counter'] = hparams['epoch_counter_fn']()
             # reset linear classifier
-            hparams['recoverables']['classifier'] = \
-                    hparams['modules']['classifier'] = \
-                    hparams['classifier'] = hparams['classifier_fn']()
+            if hparams['reinit_classifier'] or task_idx == start_task:
+                hparams['recoverables']['classifier'] = \
+                        hparams['modules']['classifier'] = \
+                        hparams['classifier'] = hparams['classifier_fn']()
             # set new checkpointer
             hparams['checkpointer'] = sb.utils.checkpoints.Checkpointer(
                 os.path.join(hparams['save_folder'], 'task{}'.format(task_idx)),

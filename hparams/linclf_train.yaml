@@ -53,7 +53,7 @@ train_dataloader_opts:
   batch_size: !ref <batch_size>
   num_workers: 8
   shuffle: True
-  # drop_last: True
+  drop_last: True
 
 valid_dataloader_opts:
   batch_size: 32
@@ -124,6 +124,7 @@ embedding_model: !new:models.tdnn.ECAPA_TDNN
 #     input_size: !ref <emb_dim>
 #     out_neurons: !ref <n_classes>
 
+reinit_classifier: True
 classifier_fn: !name:models.modules.Classifier
     input_size: !ref <emb_dim>
     output_size: !ref <n_classes>
