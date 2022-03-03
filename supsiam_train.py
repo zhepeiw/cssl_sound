@@ -266,7 +266,7 @@ class SimSiam(sb.core.Brain):
             )
             # Save the current checkpoint and delete previous checkpoints,
             self.checkpointer.save_and_keep_only(
-                meta={'loss': self.train_stats['loss']}, min_keys=['loss']
+                #  meta={'loss': self.train_stats['loss']}, min_keys=['loss']
             )
 
 
@@ -482,7 +482,8 @@ if __name__ == "__main__":
         )
 
         brain.checkpointer.recoverables.pop('datapoint_counter')
-        brain.on_evaluate_start(min_key='loss')
+        #  brain.on_evaluate_start(min_key='loss')
+        brain.on_evaluate_start()
 
         if num_tasks > 1:
             # global buffer

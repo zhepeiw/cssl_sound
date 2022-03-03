@@ -605,7 +605,7 @@ if __name__ == "__main__":
             },
         )
         ssl_checkpointer.recover_if_possible(
-            min_key='loss',
+            #  min_key='loss',
         )
         for p in hparams['embedding_model'].parameters():
             p.requires_grad = False
