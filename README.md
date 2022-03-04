@@ -38,6 +38,12 @@ Similar to the settings in the supervised training, to run experiments with SimS
 python simsiam_train.py hparams/simsiam_train.yaml --data_folder <YOUR_DATA_FOLDER> --output_base <YOUR_OUTPUT_FOLDER>
 ```
 
+### SimCLR Training
+Similar to the settings in the supervised and SimSiam training, to run experiments with SimCLR as a self-supervised method, run
+
+```bash
+python simclr_train.py hparams/simclr_train.yaml --data_folder <YOUR_DATA_FOLDER> --output_base <YOUR_OUTPUT_FOLDER>
+```
 
 ### Linear Evaluation
 To run the linear classification on top of the frozen pretrained models, run
