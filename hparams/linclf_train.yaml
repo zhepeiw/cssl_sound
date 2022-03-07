@@ -85,6 +85,7 @@ f_min: 0
 # Number of classes
 n_classes: 10
 emb_dim: 2048
+emb_norm_type: bn
 
 # Functions
 compute_features: !new:speechbrain.lobes.features.Fbank
@@ -102,13 +103,13 @@ mean_var_norm: !new:speechbrain.processing.features.InputNormalization
     norm_type: sentence
     std_norm: False
 
-embedding_model: !new:models.tdnn.ECAPA_TDNN
-    input_size: !ref <n_mels>
-    channels: [1024, 1024, 1024, 1024, 3072]
-    kernel_sizes: [5, 3, 3, 3, 1]
-    dilations: [1, 2, 3, 4, 1]
-    attention_channels: 128
-    lin_neurons: !ref <emb_dim>
+# embedding_model: !new:models.tdnn.ECAPA_TDNN
+#     input_size: !ref <n_mels>
+#     channels: [1024, 1024, 1024, 1024, 3072]
+#     kernel_sizes: [5, 3, 3, 3, 1]
+#     dilations: [1, 2, 3, 4, 1]
+#     attention_channels: 128
+#     lin_neurons: !ref <emb_dim>
 # embedding_model: !new:models.tdnn.ECAPA_TDNN
 #     input_size: !ref <n_mels>
 #     channels: [512, 512, 512, 1024]
@@ -116,9 +117,10 @@ embedding_model: !new:models.tdnn.ECAPA_TDNN
 #     dilations: [1, 2, 3, 1]
 #     attention_channels: 128
 #     lin_neurons: !ref <emb_dim>
-# embedding_model: !new:models.pann.Cnn14
-#     mel_bins: !ref <n_mels>
-#     emb_dim: !ref <emb_dim>
+embedding_model: !new:models.pann.Cnn14
+    mel_bins: !ref <n_mels>
+    emb_dim: !ref <emb_dim>
+    norm_type: !ref <emb_norm_type>
 
 # classifier_fn: !name:speechbrain.lobes.models.ECAPA_TDNN.Classifier
 #     input_size: !ref <emb_dim>

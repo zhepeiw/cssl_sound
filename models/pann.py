@@ -29,7 +29,7 @@ def init_bn(bn):
 
 
 class ConvBlock(nn.Module):
-    def __init__(self, in_channels, out_channels):
+    def __init__(self, in_channels, out_channels, norm_type):
 
         super(ConvBlock, self).__init__()
 
@@ -43,23 +43,36 @@ class ConvBlock(nn.Module):
                               kernel_size=(3, 3), stride=(1, 1),
                               padding=(1, 1), bias=False)
 
-        self.bn1 = nn.BatchNorm2d(out_channels)
-        self.bn2 = nn.BatchNorm2d(out_channels)
+        self.norm_type = norm_type
+
+        if norm_type == 'bn':
+            self.norm1 = nn.BatchNorm2d(out_channels)
+            self.norm2 = nn.BatchNorm2d(out_channels)
+        elif norm_type == 'in':
+            #  self.norm1 = nn.GroupNorm(out_channels, out_channels)
+            #  self.norm2 = nn.GroupNorm(out_channels, out_channels)
+            self.norm1 = nn.InstanceNorm2d(out_channels, affine=True, track_running_stats=True)
+            self.norm2 = nn.InstanceNorm2d(out_channels, affine=True, track_running_stats=True)
+        elif norm_type == 'ln':
+            self.norm1 = nn.GroupNorm(1, out_channels)
+            self.norm2 = nn.GroupNorm(1, out_channels)
+        else:
+            raise ValueError('Unknown norm type {}'.format(norm_type))
 
         self.init_weight()
 
     def init_weight(self):
         init_layer(self.conv1)
         init_layer(self.conv2)
-        init_bn(self.bn1)
-        init_bn(self.bn2)
+        init_bn(self.norm1)
+        init_bn(self.norm2)
 
 
     def forward(self, input, pool_size=(2, 2), pool_type='avg'):
 
         x = input
-        x = F.relu_(self.bn1(self.conv1(x)))
-        x = F.relu_(self.bn2(self.conv2(x)))
+        x = F.relu_(self.norm1(self.conv1(x)))
+        x = F.relu_(self.norm2(self.conv2(x)))
         if pool_type == 'max':
             x = F.max_pool2d(x, kernel_size=pool_size)
         elif pool_type == 'avg':
@@ -81,6 +94,7 @@ class Cnn14(nn.Module):
         self,
         mel_bins,
         emb_dim,
+        norm_type='bn',
     ):
 
         super(Cnn14, self).__init__()
@@ -105,15 +119,23 @@ class Cnn14(nn.Module):
         #  # Spec augmenter
         #  self.spec_augmenter = SpecAugmentation(time_drop_width=64, time_stripes_num=2,
         #      freq_drop_width=8, freq_stripes_num=2)
+        self.norm_type = norm_type
+        if norm_type == 'bn':
+            self.norm0 = nn.BatchNorm2d(mel_bins)
+        elif norm_type == 'in':
+            #  self.norm0 = nn.GroupNorm(mel_bins, mel_bins)
+            self.norm0 = nn.InstanceNorm2d(mel_bins, affine=True, track_running_stats=True)
+        elif norm_type == 'ln':
+            self.norm0 = nn.GroupNorm(1, mel_bins)
+        else:
+            raise ValueError('Unknown norm type {}'.format(norm_type))
 
-        self.bn0 = nn.BatchNorm2d(mel_bins)
-
-        self.conv_block1 = ConvBlock(in_channels=1, out_channels=64)
-        self.conv_block2 = ConvBlock(in_channels=64, out_channels=128)
-        self.conv_block3 = ConvBlock(in_channels=128, out_channels=256)
-        self.conv_block4 = ConvBlock(in_channels=256, out_channels=512)
-        self.conv_block5 = ConvBlock(in_channels=512, out_channels=1024)
-        self.conv_block6 = ConvBlock(in_channels=1024, out_channels=emb_dim)
+        self.conv_block1 = ConvBlock(in_channels=1, out_channels=64, norm_type=norm_type)
+        self.conv_block2 = ConvBlock(in_channels=64, out_channels=128, norm_type=norm_type)
+        self.conv_block3 = ConvBlock(in_channels=128, out_channels=256, norm_type=norm_type)
+        self.conv_block4 = ConvBlock(in_channels=256, out_channels=512, norm_type=norm_type)
+        self.conv_block5 = ConvBlock(in_channels=512, out_channels=1024, norm_type=norm_type)
+        self.conv_block6 = ConvBlock(in_channels=1024, out_channels=emb_dim, norm_type=norm_type)
 
         #  self.fc1 = nn.Linear(2048, 2048, bias=True)
         #  self.fc_audioset = nn.Linear(2048, classes_num, bias=True)
@@ -121,7 +143,7 @@ class Cnn14(nn.Module):
         self.init_weight()
 
     def init_weight(self):
-        init_bn(self.bn0)
+        init_bn(self.norm0)
         #  init_layer(self.fc1)
         #  init_layer(self.fc_audioset)
 
@@ -135,7 +157,7 @@ class Cnn14(nn.Module):
         if x.dim() == 3:
             x = x.unsqueeze(1)
         x = x.transpose(1, 3)
-        x = self.bn0(x)
+        x = self.norm0(x)
         x = x.transpose(1, 3)
 
         #  if self.training:
@@ -174,8 +196,9 @@ class Cnn14(nn.Module):
 
 
 if __name__ == '__main__':
+    import pdb
     x = torch.randn(32, 1, 200, 80)
-    model = Cnn14(80, 2048)
+    model = Cnn14(80, 2048, 'ln')
     print(sum(p.numel() for p in model.parameters() if p.requires_grad))
     out = model(x)
     print(out.shape)
