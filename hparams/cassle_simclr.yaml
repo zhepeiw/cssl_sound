@@ -164,6 +164,18 @@ classifier: !new:models.modules.Classifier
     input_size: !ref <emb_dim>
     output_size: !ref <n_classes>
 
+prev_embedding_model_fn: !name:models.pann.Cnn14
+    mel_bins: !ref <n_mels>
+    emb_dim: !ref <emb_dim>
+    norm_type: !ref <emb_norm_type>
+
+prev_predictor_fn: !name:models.modules.CasslePredictor
+    input_size: !ref <emb_dim>
+    hidden_size: !ref <emb_dim>
+    bottleneck_size: !ref <emb_dim> // 4
+    output_size: !ref <emb_dim>
+    norm_type: !ref <proj_norm_type>
+
 modules:
     compute_features: !ref <compute_features>
     embedding_model: !ref <embedding_model>
@@ -179,6 +191,10 @@ compute_simclr_cost: !new:losses.SimCLRLoss
 sup_weight: 1.
 compute_sup_cost: !new:losses.LogSoftmaxWithProbWrapper
     loss_fn: !new:torch.nn.Identity
+
+dist_weight: 1.
+compute_dist_cost: !new:losses.SimCLRLoss
+    tau: 0.5
 
 acc_metric: !name:speechbrain.utils.Accuracy.AccuracyStats
 
@@ -239,6 +255,6 @@ wandb_logger_fn: !name:utils.MyWandBLogger
     name: !ref <time_stamp>+seed_<seed>+<experiment_name>
     dir: !ref <output_folder>
     reinit: True
-    yaml_config: hparams/supclr_train.yaml
+    yaml_config: hparams/cassle_simclr.yaml
     resume: False
 

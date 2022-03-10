@@ -23,7 +23,7 @@ from schedulers import SimSiamCosineScheduler
 import pdb
 
 
-class SupCLR(sb.core.Brain):
+class SimCLR(sb.core.Brain):
     """
         Brain class for classifier with supervised training
     """
@@ -35,12 +35,16 @@ class SupCLR(sb.core.Brain):
         x1 = self.prepare_features(wavs1, lens, stage)
         x2 = self.prepare_features(wavs2, lens, stage)
         # Embeddings
-        h1 = self.modules.embedding_model(x1)
-        h2 = self.modules.embedding_model(x2)
-        z1 = self.modules.predictor(self.modules.projector(h1))  # [B, 1, D]
-        z2 = self.modules.predictor(self.modules.projector(h2))  # [B, 1, D]
-        o1 = self.modules.classifier(h1) # [B, 1, C]
-        return z1, z2, o1, lens
+        e1 = self.modules.embedding_model(x1)
+        e2 = self.modules.embedding_model(x2)
+        h1 = self.modules.projector(e1)  # [B, 1, D]
+        h2 = self.modules.projector(e2)  # [B, 1, D]
+        z1 = self.modules.predictor(h1)  # [B, 1, D]
+        z2 = self.modules.predictor(h2)  # [B, 1, D]
+        o1 = self.modules.classifier(e1) # [B, 1, C]
+        #  o2 = self.modules.classifier(e2) # [B, 1, C]
+
+        return z1, z2, h1, h2, o1, lens
 
     def prepare_features(self, wavs, lens, stage):
         # time domain augmentation
@@ -67,7 +71,7 @@ class SupCLR(sb.core.Brain):
         return feats
 
     def compute_objectives(self, predictions, batch, stage):
-        z1, z2, o1, lens = predictions
+        z1, z2, h1, h2, o1, lens = predictions
         # SSL loss
         ssl_loss = self.hparams.compute_simclr_cost(z1.squeeze(), z2.squeeze())
         # supervised loss
@@ -460,7 +464,7 @@ if __name__ == "__main__":
             print('==> Adjusting scheduler for {} steps at {}'.format(
                 steps_per_epoch, hparams['checkpointer'].checkpoints_dir))
 
-        brain = SupCLR(
+        brain = SimCLR(
             modules=hparams["modules"],
             opt_class=hparams["opt_class"],
             hparams=hparams,

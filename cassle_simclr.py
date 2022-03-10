@@ -11,6 +11,7 @@ import speechbrain as sb
 from speechbrain.utils.distributed import run_on_main
 from dataset.prepare_urbansound8k import prepare_split_urbansound8k_csv
 from tqdm import tqdm
+import copy
 from sklearn.metrics import confusion_matrix
 import wandb
 from confusion_matrix_fig import create_cm_fig
@@ -40,7 +41,29 @@ class SupCLR(sb.core.Brain):
         z1 = self.modules.predictor(self.modules.projector(h1))  # [B, 1, D]
         z2 = self.modules.predictor(self.modules.projector(h2))  # [B, 1, D]
         o1 = self.modules.classifier(h1) # [B, 1, C]
-        return z1, z2, o1, lens
+        if self.hparams.prev_embedding_model is not None:
+            self.modules.prev_embedding_model.eval()
+            h1_prev = self.modules.prev_embedding_model(x1)
+            h2_prev = self.modules.prev_embedding_model(x2)
+            h1_hat = self.modules.prev_predictor(h1)
+            h2_hat = self.modules.prev_predictor(h2)
+            return {
+                'z1': z1,
+                'z2': z2,
+                'o1': o1,
+                'h1_hat': h1_hat,
+                'h2_hat': h2_hat,
+                'h1_prev': h1_prev.detach(),
+                'h2_prev': h2_prev.detach(),
+                'lens': lens,
+            }
+        else:
+            return {
+                'z1': z1,
+                'z2': z2,
+                'o1': o1,
+                'lens': lens,
+            }
 
     def prepare_features(self, wavs, lens, stage):
         # time domain augmentation
@@ -67,21 +90,37 @@ class SupCLR(sb.core.Brain):
         return feats
 
     def compute_objectives(self, predictions, batch, stage):
-        z1, z2, o1, lens = predictions
+        z1, z2 = predictions['z1'], predictions['z2']
+        lens = predictions['lens']
         # SSL loss
-        ssl_loss = self.hparams.compute_simclr_cost(z1.squeeze(), z2.squeeze())
+        ssl_loss = self.hparams.compute_simclr_cost(z1.squeeze(1), z2.squeeze(1))
         # supervised loss
+        o1 = predictions['o1']
         if self.hparams.use_mixup and stage == sb.Stage.TRAIN:
             targets, _ = batch.label_prob
         else:
             targets, _ = batch.class_string_encoded # [bs, 1]
             targets = F.one_hot(targets, o1.shape[-1]).float()  # [bs, 1, C]
         sup_loss = self.hparams.compute_sup_cost(o1, targets, lens)
-        loss = self.hparams.sup_weight * sup_loss + self.hparams.ssl_weight * ssl_loss
+        # distillation loss
+        if self.hparams.prev_embedding_model is not None:
+            h1_hat, h2_hat = predictions['h1_hat'], predictions['h2_hat']
+            h1_prev, h2_prev = predictions['h1_prev'], predictions['h2_prev']
+            dist_loss_1 = self.hparams.compute_dist_cost(h1_hat.squeeze(1),
+                                                         h1_prev.squeeze(1))
+            dist_loss_2 = self.hparams.compute_dist_cost(h2_hat.squeeze(1),
+                                                         h2_prev.squeeze(1))
+            dist_loss = 0.5 * (dist_loss_1 + dist_loss_2)
+        else:
+            dist_loss = torch.zeros(1).to(ssl_loss.device)
+        loss = self.hparams.sup_weight * sup_loss \
+                + self.hparams.ssl_weight * ssl_loss \
+                + self.hparams.dist_weight * dist_loss
 
         loss_dict = {
             'ssl': ssl_loss,
             'sup': sup_loss,
+            'dist': dist_loss,
         }
 
         if stage == sb.Stage.TRAIN and \
@@ -400,6 +439,26 @@ if __name__ == "__main__":
                     hparams['lr_scheduler'] = hparams['lr_scheduler_fn']()
             hparams['recoverables']['epoch_counter'] = \
                     hparams['epoch_counter'] = hparams['epoch_counter_fn']()
+            if task_idx > 0:
+                hparams['recoverables']['prev_predictor'] = \
+                        hparams['modules']['prev_predictor'] = \
+                        hparams['prev_predictor'] = hparams['prev_predictor_fn']()
+                hparams['modules']['prev_embedding_model'] = \
+                        hparams['prev_embedding_model'] = hparams['prev_embedding_model_fn']()
+                prev_embedding_checkpointer = sb.utils.checkpoints.Checkpointer(
+                    hparams['prev_checkpointer'].checkpoints_dir,
+                    recoverables={
+                        'embedding_model': hparams['prev_embedding_model']
+                    },
+                )
+                prev_embedding_checkpointer.recover_if_possible()
+                #  hparams['modules']['prev_embedding_model'] = \
+                #          hparams['prev_embedding_model'] = copy.deepcopy(hparams['embedding_model'])
+                for p in hparams['prev_embedding_model'].parameters():
+                    p.requires_grad = False
+            else:
+                hparams['prev_predictor'] = None
+                hparams['prev_embedding_model'] = None
             # set new checkpointer
             hparams['checkpointer'] = sb.utils.checkpoints.Checkpointer(
                 os.path.join(hparams['save_folder'], 'task{}'.format(task_idx)),
@@ -415,6 +474,24 @@ if __name__ == "__main__":
                     hparams['lr_scheduler'] = hparams['lr_scheduler_fn']()
             hparams['recoverables']['epoch_counter'] = \
                     hparams['epoch_counter'] = hparams['epoch_counter_fn']()
+            if task_idx > 0:
+                hparams['recoverables']['prev_predictor'] = \
+                        hparams['modules']['prev_predictor'] = \
+                        hparams['prev_predictor'] = hparams['prev_predictor_fn']()
+                hparams['modules']['prev_embedding_model'] = \
+                        hparams['prev_embedding_model'] = hparams['prev_embedding_model_fn']()
+                prev_embedding_checkpointer = sb.utils.checkpoints.Checkpointer(
+                    hparams['prev_checkpointer'].checkpoints_dir,
+                    recoverables={
+                        'embedding_model': hparams['prev_embedding_model']
+                    },
+                )
+                prev_embedding_checkpointer.recover_if_possible()
+                for p in hparams['prev_embedding_model'].parameters():
+                    p.requires_grad = False
+            else:
+                hparams['prev_predictor'] = None
+                hparams['prev_embedding_model'] = None
             hparams['checkpointer'] = hparams['prev_checkpointer']
             hparams['checkpointer'].add_recoverables(hparams['recoverables'])
             # TODO: restore any external buffer for data generation here
