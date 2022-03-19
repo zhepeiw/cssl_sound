@@ -28,6 +28,7 @@ replay_num_keep: 0
 use_mixup: False
 mixup_alpha: 0.4
 train_duration: 2.0
+dist_set: null
 
 # Training parameters
 number_of_epochs: 50
@@ -195,6 +196,7 @@ compute_sup_cost: !new:losses.LogSoftmaxWithProbWrapper
 dist_weight: 1.
 compute_dist_cost: !new:losses.SimCLRLoss
     tau: 0.5
+# compute_dist_cost: !new:torch.nn.MSELoss
 
 acc_metric: !name:speechbrain.utils.Accuracy.AccuracyStats
 

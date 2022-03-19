@@ -43,10 +43,22 @@ class SupCLR(sb.core.Brain):
         o1 = self.modules.classifier(h1) # [B, 1, C]
         if self.hparams.prev_embedding_model is not None:
             self.modules.prev_embedding_model.eval()
-            h1_prev = self.modules.prev_embedding_model(x1)
-            h2_prev = self.modules.prev_embedding_model(x2)
-            h1_hat = self.modules.prev_predictor(h1)
-            h2_hat = self.modules.prev_predictor(h2)
+            if batch.dist_sig1[0] is not None:
+                dist_wavs1, dist_lens = batch.dist_sig1
+                dist_wavs2, _ = batch.dist_sig2
+                dist_x1 = self.prepare_features(dist_wavs1, dist_lens, stage)
+                dist_x2 = self.prepare_features(dist_wavs2, dist_lens, stage)
+                h1_prev = self.modules.prev_embedding_model(dist_x1)
+                h2_prev = self.modules.prev_embedding_model(dist_x2)
+                dist_h1 = self.modules.embedding_model(dist_x1)
+                dist_h2 = self.modules.embedding_model(dist_x2)
+                h1_hat = self.modules.prev_predictor(dist_h1)
+                h2_hat = self.modules.prev_predictor(dist_h2)
+            else:
+                h1_prev = self.modules.prev_embedding_model(x1)
+                h2_prev = self.modules.prev_embedding_model(x2)
+                h1_hat = self.modules.prev_predictor(h1)
+                h2_hat = self.modules.prev_predictor(h2)
             return {
                 'z1': z1,
                 'z2': z2,
@@ -303,7 +315,7 @@ class SupCLR(sb.core.Brain):
             )
 
 
-def dataio_ssl_prep(hparams, csv_path, label_encoder):
+def dataio_ssl_prep(hparams, csv_path, label_encoder, dist_list=None):
     "Creates the datasets and their data processing pipelines."
 
     config_sample_rate = hparams["sample_rate"]
@@ -317,13 +329,7 @@ def dataio_ssl_prep(hparams, csv_path, label_encoder):
         rstart = torch.randint(0, len(sig) - target_len + 1, (1,)).item()
         return sig[rstart:rstart+target_len]
 
-    # 2. Define audio pipeline:
-    @sb.utils.data_pipeline.takes("wav_path")
-    @sb.utils.data_pipeline.provides("sig1", "sig2")
-    def audio_pipeline(wav_path):
-        """Load the signal, and pass it and its length to the corruption class.
-        This is done on the CPU in the `collate_fn`."""
-
+    def read_sig(wav_path):
         sig, read_sr = torchaudio.load(wav_path)
 
         # If multi-channels, downmix it to a mono channel
@@ -340,12 +346,44 @@ def dataio_ssl_prep(hparams, csv_path, label_encoder):
                 )
             # Resample audio
             sig = hparams["resampler"].forward(sig)
-
         # scaling
         max_amp = torch.abs(sig).max().item()
         #  assert max_amp > 0
         scaling = 1 / max_amp * 0.9
         sig = scaling * sig
+        return sig
+
+    # 2. Define audio pipeline:
+    @sb.utils.data_pipeline.takes("wav_path")
+    @sb.utils.data_pipeline.provides("sig1", "sig2", "dist_sig1", "dist_sig2")
+    def audio_pipeline(wav_path):
+        """Load the signal, and pass it and its length to the corruption class.
+        This is done on the CPU in the `collate_fn`."""
+
+        #  sig, read_sr = torchaudio.load(wav_path)
+        #
+        #  # If multi-channels, downmix it to a mono channel
+        #  sig = torch.squeeze(sig)
+        #  if len(sig.shape) > 1:
+        #      sig = torch.mean(sig, dim=0)
+        #
+        #  # Convert sample rate to required config_sample_rate
+        #  if read_sr != config_sample_rate:
+        #      # Re-initialize sampler if source file sample rate changed compared to last file
+        #      if read_sr != hparams["resampler"].orig_freq:
+        #          hparams["resampler"] = torchaudio.transforms.Resample(
+        #              orig_freq=read_sr, new_freq=config_sample_rate
+        #          )
+        #      # Resample audio
+        #      sig = hparams["resampler"].forward(sig)
+        #
+        #  # scaling
+        #  max_amp = torch.abs(sig).max().item()
+        #  #  assert max_amp > 0
+        #  scaling = 1 / max_amp * 0.9
+        #  sig = scaling * sig
+
+        sig = read_sig(wav_path)
 
         target_len = int(hparams["train_duration"] * config_sample_rate)
         if len(sig) > target_len:
@@ -356,6 +394,21 @@ def dataio_ssl_prep(hparams, csv_path, label_encoder):
             sig2 = sig.clone()
         yield sig1
         yield sig2
+        # distillation dataset
+        if dist_list is None or len(dist_list) == 0:
+            yield None
+            yield None
+        else:
+            dist_dict = hparams['np_rng'].choice(dist_list, size=1)[0]
+            dist_sig = read_sig(dist_dict['wav_path'])
+            if len(dist_sig) > target_len:
+                dist_sig1 = random_segment(dist_sig, target_len)
+                dist_sig2 = random_segment(dist_sig, target_len)
+            else:
+                dist_sig1 = dist_sig
+                dist_sig2 = dist_sig.clone()
+            yield dist_sig1
+            yield dist_sig2
 
     # 3. Define label pipeline:
     @sb.utils.data_pipeline.takes("class_name")
@@ -370,7 +423,7 @@ def dataio_ssl_prep(hparams, csv_path, label_encoder):
     ds = sb.dataio.dataset.DynamicItemDataset.from_csv(
         csv_path=csv_path,
         dynamic_items=[audio_pipeline, label_pipeline],
-        output_keys=["id", "sig1", "sig2", "class_string_encoded"]
+        output_keys=["id", "sig1", "sig2", "dist_sig1", "dist_sig2", "class_string_encoded"]
     )
 
     return ds
@@ -512,7 +565,6 @@ if __name__ == "__main__":
             replay['train'],
             hparams['replay_num_keep'],
         )
-        replay['train'] += curr_train_replay
         if hparams['use_mixup']:
             train_data = mixup_dataio_ssl_prep(
                 hparams,
@@ -520,10 +572,17 @@ if __name__ == "__main__":
                 label_encoder,
             )
         else:
+            if hparams['dist_set'] is None:
+                dist_set = None
+            elif hparams['dist_set'] == 'buffer':
+                dist_set = replay['train']
+            else:
+                raise ValueError("dist set {} is not supported".format(hparams['dist_set']))
             train_data = dataio_ssl_prep(
                 hparams,
                 os.path.join(hparams['save_folder'], 'train_task{}_replay.csv'.format(task_idx)),
                 label_encoder,
+                dist_set,
             )
         # lr scheduler setups rely on task-wise dataloader
         if isinstance(hparams['lr_scheduler'], SimSiamCosineScheduler):
@@ -558,6 +617,8 @@ if __name__ == "__main__":
 
         if num_tasks > 1:
             # global buffer
+            # update replay buffer
+            replay['train'] += curr_train_replay
             torch.save(
                 replay,
                 os.path.join(
