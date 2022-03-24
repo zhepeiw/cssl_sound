@@ -116,4 +116,5 @@ class BarlowTwinsLoss(nn.Module):
         off_diag = self.off_diagonal(c).pow_(2).sum()
 
         loss = on_diag + self.lambda_rr * off_diag
-        return loss / (c.shape[0]*c.shape[1]) * self.loss_scale
+        return self.loss_scale * loss
+        # return loss / (c.shape[0]*c.shape[1]) * self.loss_scale

@@ -32,15 +32,14 @@ train_duration: 2.0
 # Training parameters
 number_of_epochs: 50
 batch_size: 32
-# lr: 0.001
-# base_lr: 0.00000001
-# max_lr: !ref <lr>
-# step_size: 65000
-lr_scale: 0.005
+
+loss_scale: !ref 1 # 1 / (<out_dim> * <out_dim>)
+max_lr: !ref 0.0001
+min_lr: !ref <max_lr> / 1000
 warmup_epochs: 5
-warmup_lr: !ref <batch_size> * 0 / 256 * <lr_scale>
-base_lr: !ref <batch_size> * 0.03 / 256 * <lr_scale>
-final_lr: !ref <batch_size> * 0.00000001 / 256 * <lr_scale>
+warmup_lr: !ref <batch_size> * 0 / 256
+base_lr: !ref <batch_size> * <max_lr> / 256
+final_lr: !ref <batch_size> * <min_lr> / 256
 
 # dataset
 sample_rate: 16000
@@ -169,14 +168,13 @@ modules:
     predictor: !ref <predictor>
     mean_var_norm: !ref <mean_var_norm>
 
-ssl_weight: 0.
-loss_scale: 10.
+ssl_weight: 1.
 compute_BarlowTwins_cost: !new:losses.BarlowTwinsLoss
     lambda_rr: 0.005
     out_dim: !ref <out_dim>
     loss_scale: !ref <loss_scale>
 
-sup_weight: 1.
+sup_weight: 0.
 compute_sup_cost: !new:losses.LogSoftmaxWithProbWrapper
     loss_fn: !new:torch.nn.Identity
 
