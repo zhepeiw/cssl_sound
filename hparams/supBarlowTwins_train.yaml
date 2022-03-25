@@ -1,7 +1,7 @@
 # File              : supBarlowTwins.py
 # Author            : Xilin Jiang <xilinj2@illinois.edu>
 # Date              : 04.03.2022
-# Last Modified Date: 04.03.2022
+# Last Modified Date: 24.03.2022
 # Last Modified By  : Xilin Jiang <xilinj2@illinois.edu>
 
 
@@ -34,7 +34,7 @@ number_of_epochs: 50
 batch_size: 32
 
 loss_scale: !ref 1 # 1 / (<out_dim> * <out_dim>)
-max_lr: !ref 0.0001
+max_lr: !ref 0.001
 min_lr: !ref <max_lr> / 1000
 warmup_epochs: 5
 warmup_lr: !ref <batch_size> * 0 / 256
@@ -88,6 +88,7 @@ use_freq_shift: False
 n_classes: 10
 emb_dim: 2048
 out_dim: 8192
+emb_norm_type: bn
 
 # augmentation
 # time_domain_aug: !new:speechbrain.lobes.augment.TimeDomainSpecAugment
@@ -131,21 +132,22 @@ mean_var_norm: !new:speechbrain.processing.features.InputNormalization
     norm_type: sentence
     std_norm: False
 
-embedding_model: !new:models.tdnn.ECAPA_TDNN
-    input_size: !ref <n_mels>
-    channels: [1024, 1024, 1024, 1024, 3072]
-    kernel_sizes: [5, 3, 3, 3, 1]
-    dilations: [1, 2, 3, 4, 1]
-    attention_channels: 128
-    lin_neurons: !ref <emb_dim>
-#     # channels: [512, 512, 512, 1024]
-#     # kernel_sizes: [5, 3, 3, 1]
-#     # dilations: [1, 2, 3, 1]
-#     # attention_channels: 128
-#     # lin_neurons: !ref <emb_dim>
-# embedding_model: !new:models.pann.Cnn14
-#     mel_bins: !ref <n_mels>
-#     emb_dim: !ref <emb_dim>
+# embedding_model: !new:models.tdnn.ECAPA_TDNN
+#     input_size: !ref <n_mels>
+#     channels: [1024, 1024, 1024, 1024, 3072]
+#     kernel_sizes: [5, 3, 3, 3, 1]
+#     dilations: [1, 2, 3, 4, 1]
+#     attention_channels: 128
+#     lin_neurons: !ref <emb_dim>
+    # channels: [512, 512, 512, 1024]
+    # kernel_sizes: [5, 3, 3, 1]
+    # dilations: [1, 2, 3, 1]
+    # attention_channels: 128
+    # lin_neurons: !ref <emb_dim>
+embedding_model: !new:models.pann.Cnn14
+    mel_bins: !ref <n_mels>
+    emb_dim: !ref <emb_dim>
+    norm_type: !ref <emb_norm_type>
 
 projector: !new:models.modules.SimSiamProjector
     input_size: !ref <emb_dim>
