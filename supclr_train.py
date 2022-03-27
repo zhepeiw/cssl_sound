@@ -331,7 +331,7 @@ def dataio_ssl_prep(hparams, csv_path, label_encoder):
     ds = sb.dataio.dataset.DynamicItemDataset.from_csv(
         csv_path=csv_path,
         dynamic_items=[audio_pipeline, label_pipeline],
-        output_keys=["id", "sig1", "sig2", "class_string_encoded"]
+        output_keys=["id", "sig1", "sig2", "class_string_encoded", "class_name"]
     )
 
     return ds
@@ -367,15 +367,7 @@ if __name__ == "__main__":
 
     # csv files split by task
     run_on_main(
-        prepare_split_urbansound8k_csv,
-        kwargs={
-            "root_dir": hparams["data_folder"],
-            'output_dir': hparams['save_folder'],
-            'task_classes': hparams['task_classes'],
-            'train_folds': hparams['train_folds'],
-            'valid_folds': hparams['valid_folds'],
-            'test_folds': hparams['test_folds'],
-        }
+        hparams['prepare_split_csv_fn']
     )
 
     label_encoder = sb.dataio.encoder.CategoricalEncoder()

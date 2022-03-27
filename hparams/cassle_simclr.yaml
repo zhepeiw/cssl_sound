@@ -13,6 +13,12 @@ resume_interrupt: False
 resume_task_idx: 0
 
 time_stamp: placeholder
+experiment_name: simsiam
+# output_folder: !ref results/<experiment_name>/<seed>
+output_base: /mnt/data/zhepei/outputs/cssl_sound/tdnn_supsiam
+output_folder: !ref <output_base>/<time_stamp>_seed_<seed>+<experiment_name>
+train_log: !ref <output_folder>/train_log.txt
+save_folder: !ref <output_folder>/save
 
 # cont learning setup
 task_classes:
@@ -49,6 +55,13 @@ train_folds: [1, 2, 3, 4, 5, 6, 7, 8]
 valid_folds: [9]
 test_folds: [10]
 label_encoder_path: "./dataset/label_encoder_us8k_ordered.txt"
+prepare_split_csv_fn: !name:dataset.prepare_urbansound8k.prepare_split_urbansound8k_csv
+  root_dir: !ref <data_folder>
+  output_dir: !ref <save_folder>
+  task_classes: !ref <task_classes>
+  train_folds: !ref <train_folds>
+  valid_folds: !ref <valid_folds>
+  test_folds: !ref <test_folds>
 
 train_dataloader_opts:
   batch_size: !ref <batch_size>
@@ -61,12 +74,6 @@ valid_dataloader_opts:
   num_workers: 8
 
 
-experiment_name: simsiam
-# output_folder: !ref results/<experiment_name>/<seed>
-output_base: /mnt/data/zhepei/outputs/cssl_sound/tdnn_supsiam
-output_folder: !ref <output_base>/<time_stamp>_seed_<seed>+<experiment_name>
-train_log: !ref <output_folder>/train_log.txt
-save_folder: !ref <output_folder>/save
 
 # Experiment params
 auto_mix_prec: True # Set it to True for mixed precision
