@@ -4,6 +4,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import torchaudio
+import torchlibrosa
 from hyperpyyaml import load_hyperpyyaml
 import logging
 import datetime
@@ -43,6 +44,11 @@ class SupSoundClassifier(sb.core.Brain):
     def prepare_features(self, wavs, lens, stage):
         # TODO: augmentation
         feats = self.modules.compute_features(wavs)
+        if stage == sb.Stage.TRAIN and self.hparams.spec_domain_aug is not None:
+            if isinstance(self.hparams.spec_domain_aug, torchlibrosa.augmentation.SpecAugmentation):
+                feats = self.hparams.spec_domain_aug(feats)
+            else:
+                feats = self.hparams.spec_domain_aug(feats, lens)
         if self.hparams.amp_to_db:
             Amp2db = torchaudio.transforms.AmplitudeToDB(
                 stype="power", top_db=80

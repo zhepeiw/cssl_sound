@@ -5,6 +5,8 @@
   - torchaudio == 0.10.0
   - tqdm == 4.62.3
   - speechbrain == 0.5.11
+  - torchlibrosa == 0.0.9
+  - torchmetrics == 0.5.1
 
 
 ## Experiments

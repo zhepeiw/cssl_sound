@@ -45,6 +45,8 @@ class TFAugmentation(nn.Module):
             x: [batch, time, freq]
         '''
         with torch.no_grad():
+            if x.dim() == 4 and x.shape[1] == 1:
+                x = x.squeeze(1)
             x = self.specaugment(x.clone())
             # circular shift in time
             if self.time_roll:

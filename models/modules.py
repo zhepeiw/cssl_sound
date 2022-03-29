@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import pdb
 
 
@@ -126,3 +127,36 @@ class Classifier(nn.Module):
 
     def forward(self, x):
         return self.layer(x.squeeze(1)).unsqueeze(1)
+
+
+def init_layer(layer):
+    """Initialize a Linear or Convolutional layer. """
+    nn.init.xavier_uniform_(layer.weight)
+
+    if hasattr(layer, 'bias'):
+        if layer.bias is not None:
+            layer.bias.data.fill_(0.)
+
+
+class PANN_Classifier(nn.Module):
+    def __init__(
+        self,
+        input_size,
+        output_size
+    ):
+        super(PANN_Classifier, self).__init__()
+        self.fc1 = nn.Linear(input_size, input_size)
+        self.fc2 = nn.Linear(input_size, output_size)
+        self.init_weight()
+
+    def init_weight(self):
+        init_layer(self.fc1)
+        init_layer(self.fc2)
+
+    def forward(self, x):
+        x = x.squeeze(1)
+        x = F.dropout(x, p=0.5, training=self.training)
+        x = F.relu_(self.fc1(x))
+        #  embedding = F.dropout(x, p=0.5, training=self.training)
+        clipwise_output = self.fc2(x)
+        return clipwise_output.unsqueeze(1)
