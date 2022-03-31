@@ -1,7 +1,7 @@
 # File              : sup_train.yaml
 # Author            : Zhepei Wang <zhepeiw2@illinois.edu>
 # Date              : 27.01.2022
-# Last Modified Date: 27.01.2022
+# Last Modified Date: 31.03.2022
 # Last Modified By  : Zhepei Wang <zhepeiw2@illinois.edu>
 
 
@@ -47,7 +47,8 @@ base_lr: !ref <batch_size> * 0.03 / 256
 final_lr: !ref <batch_size> * 0.00000001 / 256
 
 # dataset
-sample_rate: 32000
+sample_rate: 16000
+# train_duration: 4.0
 
 data_folder: "/mnt/data/Sound Sets/TAU-urban-acoustic-scenes-2019-development"
 label_encoder_path: "./dataset/label_encoder_tauuas2019_ordered.txt"
@@ -69,33 +70,21 @@ valid_dataloader_opts:
 
 
 # Experiment params
-auto_mix_prec: False # Set it to True for mixed precision
+auto_mix_prec: True # Set it to True for mixed precision
 
 
 # Feature parameters
-# n_mels: 80
-# left_frames: 0
-# right_frames: 0
-# deltas: False
-# amp_to_db: False
-# normalize: True
-# win_length: 25
-# hop_length: 10
-# n_fft: !ref <win_length> * <sample_rate> // 1000
-# f_min: 0
-# f_max: null
-# Feature parameters
-n_mels: 64
+n_mels: 80
 left_frames: 0
 right_frames: 0
 deltas: False
 amp_to_db: False
-normalize: False
-win_length: 32
+normalize: True
+win_length: 25
 hop_length: 10
 n_fft: !ref <win_length> * <sample_rate> // 1000
-f_min: 50
-f_max: 14000
+f_min: 0
+f_max: null
 use_time_roll: False
 use_freq_shift: False
 # Number of classes
@@ -117,32 +106,18 @@ spec_domain_aug: !new:augmentation.TFAugmentation
     time_roll_limit: !tuple (0, 200)
     freq_shift: !ref <use_freq_shift>
     freq_shift_limit: !tuple (-10, 10)
-# spec_domain_aug: !new:torchlibrosa.augmentation.SpecAugmentation
-#     time_drop_width: 64
-#     time_stripes_num: 2
-#     freq_drop_width: 8
-#     freq_stripes_num: 2
 
 # Functions
-# compute_features: !new:speechbrain.lobes.features.Fbank
-#     n_mels: !ref <n_mels>
-#     left_frames: !ref <left_frames>
-#     right_frames: !ref <right_frames>
-#     deltas: !ref <deltas>
-#     sample_rate: !ref <sample_rate>
-#     n_fft: !ref <n_fft>
-#     win_length: !ref <win_length>
-#     hop_length: !ref <hop_length>
-#     f_min: !ref <f_min>
-#     f_max: !ref <f_max>
-compute_features: !new:models.frontend.TL_Logmel
+compute_features: !new:speechbrain.lobes.features.Fbank
+    n_mels: !ref <n_mels>
+    left_frames: !ref <left_frames>
+    right_frames: !ref <right_frames>
+    deltas: !ref <deltas>
     sample_rate: !ref <sample_rate>
-    window_size: !ref <win_length> * <sample_rate> // 1000
-    hop_size: !ref <hop_length> * <sample_rate> // 1000
-    mel_bins: !ref <n_mels>
-    fmin: !ref <f_min>
-    fmax: !ref <f_max>
-    norm_type: !ref <emb_norm_type>
+    n_fft: !ref <n_fft>
+    win_length: !ref <win_length>
+    hop_length: !ref <hop_length>
+    f_min: !ref <f_min>
 
 mean_var_norm: !new:speechbrain.processing.features.InputNormalization
     norm_type: sentence
@@ -163,10 +138,7 @@ embedding_model: !new:models.pann.Cnn14
 # classifier: !new:speechbrain.lobes.models.ECAPA_TDNN.Classifier
 #     input_size: !ref <emb_dim>
 #     out_neurons: !ref <n_classes>
-# classifier: !new:models.modules.Classifier
-#     input_size: !ref <emb_dim>
-#     output_size: !ref <n_classes>
-classifier: !new:models.modules.PANN_Classifier
+classifier: !new:models.modules.Classifier
     input_size: !ref <emb_dim>
     output_size: !ref <n_classes>
 

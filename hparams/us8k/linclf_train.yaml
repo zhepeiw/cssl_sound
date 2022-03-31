@@ -1,7 +1,7 @@
-# File              : sup_train.yaml
+# File              : linclf_train.yaml
 # Author            : Zhepei Wang <zhepeiw2@illinois.edu>
 # Date              : 27.01.2022
-# Last Modified Date: 27.01.2022
+# Last Modified Date: 30.03.2022
 # Last Modified By  : Zhepei Wang <zhepeiw2@illinois.edu>
 
 
@@ -212,6 +212,6 @@ wandb_logger_fn: !name:utils.MyWandBLogger
     name: !ref <time_stamp>+seed_<seed>+<experiment_name>
     dir: !ref <output_folder>
     reinit: True
-    yaml_config: hparams/linclf_train.yaml
+    yaml_config: hparams/us8k/linclf_train.yaml
     resume: False
 

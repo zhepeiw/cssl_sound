@@ -3,7 +3,7 @@
 # File              : prepare_tauuas2019.py
 # Author            : Zhepei Wang <zhepeiw2@illinois.edu>
 # Date              : 26.03.2022
-# Last Modified Date: 26.03.2022
+# Last Modified Date: 30.03.2022
 # Last Modified By  : Zhepei Wang <zhepeiw2@illinois.edu>
 
 import os
@@ -50,6 +50,7 @@ def prepare_split_tauuas2019_csv(
     for meta_df, splits in zip([train_meta, valid_meta, test_meta], [train_splits, valid_splits, test_splits]):
         for idx, row in tqdm(meta_df.iterrows()):
             fname = os.path.join(root_dir, row['filename'])
+            fname = fname.replace('audio', 'audio_mono_16k')
             if 'scene_label' in meta_df:
                 class_name = row['scene_label']
             else:

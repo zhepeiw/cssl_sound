@@ -3,7 +3,7 @@
 # File              : pann.py
 # Author            : Zhepei Wang <zhepeiw2@illinois.edu>
 # Date              : 14.02.2022
-# Last Modified Date: 14.02.2022
+# Last Modified Date: 30.03.2022
 # Last Modified By  : Zhepei Wang <zhepeiw2@illinois.edu>
 
 # Adapted from https://github.com/qiuqiangkong/audioset_tagging_cnn/blob/master/pytorch/models.py
@@ -121,15 +121,15 @@ class Cnn14(nn.Module):
         #  self.spec_augmenter = SpecAugmentation(time_drop_width=64, time_stripes_num=2,
         #      freq_drop_width=8, freq_stripes_num=2)
         self.norm_type = norm_type
-        #  if norm_type == 'bn':
-        #      self.norm0 = nn.BatchNorm2d(mel_bins)
-        #  elif norm_type == 'in':
-        #      #  self.norm0 = nn.GroupNorm(mel_bins, mel_bins)
-        #      self.norm0 = nn.InstanceNorm2d(mel_bins, affine=True, track_running_stats=True)
-        #  elif norm_type == 'ln':
-        #      self.norm0 = nn.GroupNorm(1, mel_bins)
-        #  else:
-        #      raise ValueError('Unknown norm type {}'.format(norm_type))
+        if norm_type == 'bn':
+            self.norm0 = nn.BatchNorm2d(mel_bins)
+        elif norm_type == 'in':
+            #  self.norm0 = nn.GroupNorm(mel_bins, mel_bins)
+            self.norm0 = nn.InstanceNorm2d(mel_bins, affine=True, track_running_stats=True)
+        elif norm_type == 'ln':
+            self.norm0 = nn.GroupNorm(1, mel_bins)
+        else:
+            raise ValueError('Unknown norm type {}'.format(norm_type))
 
         self.conv_block1 = ConvBlock(in_channels=1, out_channels=64, norm_type=norm_type)
         self.conv_block2 = ConvBlock(in_channels=64, out_channels=128, norm_type=norm_type)
@@ -141,10 +141,10 @@ class Cnn14(nn.Module):
         #  self.fc1 = nn.Linear(2048, 2048, bias=True)
         #  self.fc_audioset = nn.Linear(2048, classes_num, bias=True)
 
-    #      self.init_weight()
-    #
-    #  def init_weight(self):
-    #      init_bn(self.norm0)
+        self.init_weight()
+
+    def init_weight(self):
+        init_bn(self.norm0)
         #  init_layer(self.fc1)
         #  init_layer(self.fc_audioset)
 
@@ -157,9 +157,9 @@ class Cnn14(nn.Module):
 
         if x.dim() == 3:
             x = x.unsqueeze(1)
-        #  x = x.transpose(1, 3)
-        #  x = self.norm0(x)
-        #  x = x.transpose(1, 3)
+        x = x.transpose(1, 3)
+        x = self.norm0(x)
+        x = x.transpose(1, 3)
 
         #  if self.training:
         #      x = self.spec_augmenter(x)
