@@ -16,11 +16,17 @@ time_stamp: placeholder
 
 # cont learning setup
 task_classes:
-  - !tuple (0, 1)
-  - !tuple (2, 3)
-  - !tuple (4, 5)
-  - !tuple (6, 7)
-  - !tuple (8, 9)
+#   - !tuple (0, 1)
+#   - !tuple (2, 3)
+#   - !tuple (4, 5)
+#   - !tuple (6, 7)
+#   - !tuple (8, 9)
+  - !tuple (3, 8)
+  - !tuple (9, 4)
+  - !tuple (1, 7)
+  - !tuple (5, 2)
+  - !tuple (6, 0)
+
 # task_classes:
 #     - !tuple (0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 replay_num_keep: 0
@@ -33,8 +39,8 @@ train_duration: 2.0
 number_of_epochs: 50
 batch_size: 32
 
-loss_scale: !ref 1 # 1 / (<out_dim> * <out_dim>)
-max_lr: !ref 0.001
+loss_scale: 1 # !ref 1 / (<out_dim> * <out_dim>)
+max_lr: 0.001
 min_lr: !ref <max_lr> / 1000
 warmup_epochs: 5
 warmup_lr: !ref <batch_size> * 0 / 256
@@ -241,4 +247,3 @@ wandb_logger_fn: !name:utils.MyWandBLogger
     reinit: True
     yaml_config: hparams/supBarlowTwins_train.yaml
     resume: False
-
