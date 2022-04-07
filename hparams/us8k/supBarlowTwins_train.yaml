@@ -1,7 +1,7 @@
 # File              : supBarlowTwins.py
 # Author            : Xilin Jiang <xilinj2@illinois.edu>
 # Date              : 04.03.2022
-# Last Modified Date: 24.03.2022
+# Last Modified Date: 07.04.2022
 # Last Modified By  : Xilin Jiang <xilinj2@illinois.edu>
 
 
@@ -13,6 +13,12 @@ resume_interrupt: False
 resume_task_idx: 0
 
 time_stamp: placeholder
+experiment_name: BarlowTwins
+# output_folder: !ref results/<experiment_name>/<seed>
+output_base: /mnt/data/zhepei/outputs/cssl_sound/tdnn_supBarlowTwins
+output_folder: !ref <output_base>/<time_stamp>_seed_<seed>+<experiment_name>
+train_log: !ref <output_folder>/train_log.txt
+save_folder: !ref <output_folder>/save
 
 # cont learning setup
 task_classes:
@@ -40,8 +46,8 @@ number_of_epochs: 50
 batch_size: 32
 
 loss_scale: 1 # !ref 1 / (<out_dim> * <out_dim>)
-max_lr: 0.001
-min_lr: !ref <max_lr> / 1000
+max_lr: 0.03
+min_lr: 0.00000001
 warmup_epochs: 5
 warmup_lr: !ref <batch_size> * 0 / 256
 base_lr: !ref <batch_size> * <max_lr> / 256
@@ -54,6 +60,13 @@ train_folds: [1, 2, 3, 4, 5, 6, 7, 8]
 valid_folds: [9]
 test_folds: [10]
 label_encoder_path: "./dataset/label_encoder_us8k_ordered.txt"
+prepare_split_csv_fn: !name:dataset.prepare_urbansound8k.prepare_split_urbansound8k_csv
+    root_dir: !ref <data_folder>
+    output_dir: !ref <save_folder>
+    task_classes: !ref <task_classes>
+    train_folds: !ref <train_folds>
+    valid_folds: !ref <valid_folds>
+    test_folds: !ref <test_folds>
 
 train_dataloader_opts:
   batch_size: !ref <batch_size>
@@ -66,16 +79,8 @@ valid_dataloader_opts:
   num_workers: 8
 
 
-experiment_name: BarlowTwins
-# output_folder: !ref results/<experiment_name>/<seed>
-output_base: /mnt/data/zhepei/outputs/cssl_sound/tdnn_supBarlowTwins
-output_folder: !ref <output_base>/<time_stamp>_seed_<seed>+<experiment_name>
-train_log: !ref <output_folder>/train_log.txt
-save_folder: !ref <output_folder>/save
-
 # Experiment params
 auto_mix_prec: True # Set it to True for mixed precision
-
 
 # Feature parameters
 n_mels: 80
@@ -245,5 +250,5 @@ wandb_logger_fn: !name:utils.MyWandBLogger
     name: !ref <time_stamp>+seed_<seed>+<experiment_name>
     dir: !ref <output_folder>
     reinit: True
-    yaml_config: hparams/supBarlowTwins_train.yaml
+    yaml_config: hparams/us8k/supclr_train.yaml
     resume: False
