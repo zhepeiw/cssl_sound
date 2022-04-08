@@ -97,6 +97,7 @@ f_min: 0
 n_classes: 10
 emb_dim: 2048
 emb_norm_type: bn
+num_splits: 4
 
 # Functions
 compute_features: !new:speechbrain.lobes.features.Fbank
@@ -128,10 +129,11 @@ mean_var_norm: !new:speechbrain.processing.features.InputNormalization
 #     dilations: [1, 2, 3, 1]
 #     attention_channels: 128
 #     lin_neurons: !ref <emb_dim>
-embedding_model: !new:models.pann.Cnn14
+embedding_model: !new:models.pann_moco.Cnn14
     mel_bins: !ref <n_mels>
     emb_dim: !ref <emb_dim>
     norm_type: !ref <emb_norm_type>
+    num_splits: !ref <num_splits>
 
 # classifier_fn: !name:speechbrain.lobes.models.ECAPA_TDNN.Classifier
 #     input_size: !ref <emb_dim>
