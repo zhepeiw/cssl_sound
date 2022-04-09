@@ -1,7 +1,7 @@
 # File              : linclf_train.yaml
 # Author            : Zhepei Wang <zhepeiw2@illinois.edu>
 # Date              : 27.01.2022
-# Last Modified Date: 30.03.2022
+# Last Modified Date: 08.04.2022
 # Last Modified By  : Zhepei Wang <zhepeiw2@illinois.edu>
 
 
@@ -54,7 +54,7 @@ final_lr: !ref <batch_size> * 0.00000001 / 256
 
 # dataset
 sample_rate: 16000
-data_folder: "/home/junkaiwu/datasets/UrbanSound8K/UrbanSound8K"
+data_folder: "/mnt/data/Sound Sets/UrbanSound8K/UrbanSound8K"
 train_folds: [1, 2, 3, 4, 5, 6, 7, 8]
 valid_folds: [9]
 test_folds: [10]
@@ -203,11 +203,11 @@ train_logger: !new:speechbrain.utils.train_logger.FileTrainLogger
     save_file: !ref <train_log>
 
 # wandb
-use_wandb: True
+use_wandb: False
 train_log_frequency: 20
 wandb_logger_fn: !name:utils.MyWandBLogger
     initializer: !name:wandb.init
-    entity: wujunkai
+    entity: CAL
     project: cssl_sound
     name: !ref <time_stamp>+seed_<seed>+<experiment_name>
     dir: !ref <output_folder>
