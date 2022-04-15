@@ -53,6 +53,7 @@ class SupCLR(sb.core.Brain):
         #      wavs_aug = zero_sig
         #  wavs = wavs_aug
 
+        #  with torch.cuda.amp.autocast(enabled=False):
         feats = self.modules.compute_features(wavs)  # [B, T, D]
         feats = self.hparams.spec_domain_aug(feats, lens)
         if self.hparams.amp_to_db:

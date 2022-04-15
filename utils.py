@@ -1,4 +1,5 @@
 import ruamel.yaml
+import numpy as np
 import speechbrain as sb
 from speechbrain.utils.train_logger import TrainLogger
 import pdb
@@ -74,3 +75,16 @@ class DatapointCounter:
         del end_of_epoch
         with open(path) as fi:
             self.current = int(fi.read())
+
+
+def prepare_task_classes(num_classes, num_tasks, seed=1234):
+    '''
+        returns a list of tuples for class-incremental seup
+    '''
+    arr = np.arange(num_classes)
+    rng = np.random.default_rng(seed)
+    if num_tasks > 1:
+        rng.shuffle(arr)
+    task_classes = np.array_split(arr, num_tasks)
+    task_classes = [tuple(e) for e in task_classes]
+    return task_classes
