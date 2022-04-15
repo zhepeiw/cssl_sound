@@ -37,13 +37,13 @@ train_duration: 4.0
 dist_set: null
 
 # Training parameters
-number_of_epochs: 10
+number_of_epochs: 100
 batch_size: 32
 # lr: 0.001
 # base_lr: 0.00000001
 # max_lr: !ref <lr>
 # step_size: 65000
-warmup_epochs: 5
+warmup_epochs: 10
 warmup_lr: !ref <batch_size> * 0 / 256
 base_lr: !ref <batch_size> * 0.03 / 256
 final_lr: !ref <batch_size> * 0.00000001 / 256
