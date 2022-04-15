@@ -15,7 +15,7 @@ resume_task_idx: 0
 time_stamp: placeholder
 experiment_name: simsiam
 # output_folder: !ref results/<experiment_name>/<seed>
-output_base: /mnt/data/zhepei/outputs/cssl_sound/tdnn_supsiam
+output_base: /mnt/data/zhepei/outputs/cssl_sound/cassle_simclr
 output_folder: !ref <output_base>/<time_stamp>_seed_<seed>+<experiment_name>
 train_log: !ref <output_folder>/train_log.txt
 save_folder: !ref <output_folder>/save
@@ -33,11 +33,11 @@ replay_num_keep: 0
 
 use_mixup: False
 mixup_alpha: 0.4
-train_duration: 2.0
+train_duration: 4.0
 dist_set: null
 
 # Training parameters
-number_of_epochs: 50
+number_of_epochs: 10
 batch_size: 32
 # lr: 0.001
 # base_lr: 0.00000001
@@ -50,18 +50,12 @@ final_lr: !ref <batch_size> * 0.00000001 / 256
 
 # dataset
 sample_rate: 16000
-data_folder: "/mnt/data/Sound Sets/UrbanSound8K/UrbanSound8K"
-train_folds: [1, 2, 3, 4, 5, 6, 7, 8]
-valid_folds: [9]
-test_folds: [10]
-label_encoder_path: "./dataset/label_encoder_us8k_ordered.txt"
-prepare_split_csv_fn: !name:dataset.prepare_urbansound8k.prepare_split_urbansound8k_csv
+data_folder: "/mnt/data/Sound Sets/TAU-urban-acoustic-scenes-2019-development"
+label_encoder_path: "./dataset/label_encoder_tauuas2019_ordered.txt"
+prepare_split_csv_fn: !name:dataset.prepare_tauuas2019.prepare_split_tauuas2019_csv
   root_dir: !ref <data_folder>
   output_dir: !ref <save_folder>
   task_classes: !ref <task_classes>
-  train_folds: !ref <train_folds>
-  valid_folds: !ref <valid_folds>
-  test_folds: !ref <test_folds>
 
 train_dataloader_opts:
   batch_size: !ref <batch_size>
@@ -264,6 +258,6 @@ wandb_logger_fn: !name:utils.MyWandBLogger
     name: !ref <time_stamp>+seed_<seed>+<experiment_name>
     dir: !ref <output_folder>
     reinit: True
-    yaml_config: hparams/us8k/cassle_simclr.yaml
+    yaml_config: hparams/tau19/cassle_simclr.yaml
     resume: False
 
