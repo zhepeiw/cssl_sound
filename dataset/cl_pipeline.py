@@ -37,7 +37,7 @@ def prepare_task_csv_from_replay(
     return curr_buffer
 
 
-def prepare_task_csv_for_linclf(
+def prepare_task_csv_from_subset(
     input_csv,
     buffer,
     num_keep='all',
@@ -63,7 +63,7 @@ def prepare_task_csv_for_linclf(
         ).tolist()
     df_agg = pd.DataFrame(curr_buffer + buffer)
     df_agg['ID'] = np.arange(len(df_agg))
-    df_agg.to_csv(input_csv.replace('raw', 'linclf'), index=False)
+    df_agg.to_csv(input_csv.replace('raw', 'subset'), index=False)
     return curr_buffer
 
 

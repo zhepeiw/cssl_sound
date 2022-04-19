@@ -16,7 +16,7 @@ from sklearn.metrics import confusion_matrix
 import wandb
 from confusion_matrix_fig import create_cm_fig
 from dataset.cl_pipeline import (
-    #  prepare_task_csv_for_linclf,
+    prepare_task_csv_from_subset,
     prepare_task_csv_from_replay,
     prepare_concat_csv,
     #  mixup_dataio_prep,
@@ -647,6 +647,30 @@ if __name__ == "__main__":
                 os.path.join(hparams['save_folder'], 'valid_task{}_replay.csv'.format(task_idx)),
                 label_encoder,
             )
+        # evaluate with subset (buffer) only
+        if hparams['linclf_train_type'] == 'subset':
+            curr_train_replay = prepare_task_csv_from_subset(
+                os.path.join(hparams['save_folder'], 'train_task{}_raw.csv'.format(task_idx)),
+                replay['train'],
+                hparams['replay_num_keep'],
+            )
+            replay['train'] += curr_train_replay
+            train_data = class_balanced_dataio_prep(
+                hparams,
+                os.path.join(hparams['save_folder'], 'train_task{}_subset.csv'.format(task_idx)),
+                label_encoder,
+            )
+            curr_valid_replay = prepare_task_csv_from_subset(
+                os.path.join(hparams['save_folder'], 'valid_task{}_raw.csv'.format(task_idx)),
+                replay['valid'],
+                'all',
+            )
+            replay['valid'] += curr_valid_replay
+            valid_data = dataio_prep(
+                hparams,
+                os.path.join(hparams['save_folder'], 'valid_task{}_subset.csv'.format(task_idx)),
+                label_encoder,
+            )
         # ideal evaluation with all seen data
         elif hparams['linclf_train_type'] == 'seen':
             for split in ['train', 'valid']:
@@ -715,7 +739,7 @@ if __name__ == "__main__":
 
         else:
             # multitask evaluation up to the current task
-            if hparams['linclf_train_type'] in ['seen', 'buffer']:
+            if hparams['linclf_train_type'] in ['seen', 'buffer', 'subset']:
                 test_stats = brain.evaluate_multitask(
                     test_datasets[:task_idx+1],
                     max_key='acc',
@@ -729,6 +753,10 @@ if __name__ == "__main__":
                     test_loader_kwargs=hparams['valid_dataloader_opts']
                 )
                 cl_acc_table[task_idx] = test_stats['acc']
+            else:
+                raise ValueError("evaluation type {} is not supported".format(
+                    hparams['linclf_train_type']
+                ))
             # global buffer
             torch.save(
                 test_stats,
