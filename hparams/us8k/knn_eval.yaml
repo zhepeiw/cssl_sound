@@ -1,0 +1,149 @@
+# File              : knn_eval.yaml
+# Author            : Zhepei Wang <zhepeiw2@illinois.edu>
+# Date              : 27.01.2022
+# Last Modified Date: 20.04.2022
+# Last Modified By  : Zhepei Wang <zhepeiw2@illinois.edu>
+
+
+seed: 2022
+__set_seed: !apply:torch.manual_seed [!ref <seed>]
+np_rng: !new:numpy.random.RandomState [!ref <seed>]
+
+resume_interrupt: False
+resume_task_idx: 0
+
+time_stamp: placeholder
+experiment_name: knn
+# output_folder: !ref results/<experiment_name>/<seed>
+output_base: /mnt/data/zhepei/outputs/cssl_sound/knn
+output_folder: !ref <output_base>/<time_stamp>_seed_<seed>+<experiment_name>
+train_log: !ref <output_folder>/train_log.txt
+save_folder: !ref <output_folder>/save
+
+# cont learning setup
+knn_train_type: buffer
+task_classes:
+  # - !tuple (0, 1)
+  # - !tuple (2, 3)
+  # - !tuple (4, 5)
+  # - !tuple (6, 7)
+  # - !tuple (8, 9)
+  - !tuple (3, 8)
+  - !tuple (9, 4)
+  - !tuple (1, 7)
+  - !tuple (5, 2)
+  - !tuple (6, 0)
+# task_classes:
+#     - !tuple (0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+replay_num_keep: 100
+
+use_mixup: False
+mixup_alpha: 0.4
+
+# Training parameters
+number_of_epochs: 1
+batch_size: 32
+
+knn_k: 200
+knn_t: 0.1
+
+# dataset
+sample_rate: 16000
+data_folder: "/mnt/data/Sound Sets/UrbanSound8K/UrbanSound8K"
+train_folds: [1, 2, 3, 4, 5, 6, 7, 8]
+valid_folds: [9]
+test_folds: [10]
+label_encoder_path: "./dataset/label_encoder_us8k_ordered.txt"
+prepare_split_csv_fn: !name:dataset.prepare_urbansound8k.prepare_split_urbansound8k_csv
+  root_dir: !ref <data_folder>
+  output_dir: !ref <save_folder>
+  task_classes: !ref <task_classes>
+  train_folds: !ref <train_folds>
+  valid_folds: !ref <valid_folds>
+  test_folds: !ref <test_folds>
+
+valid_dataloader_opts:
+  batch_size: 32
+  num_workers: 8
+
+# Experiment params
+auto_mix_prec: False # Set it to True for mixed precision
+
+# Feature parameters
+n_mels: 80
+left_frames: 0
+right_frames: 0
+deltas: False
+amp_to_db: False
+normalize: True
+win_length: 25
+hop_length: 10
+n_fft: !ref <win_length> * <sample_rate> // 1000
+f_min: 0
+# Number of classes
+n_classes: 10
+emb_dim: 2048
+emb_norm_type: bn
+
+# Functions
+compute_features: !new:speechbrain.lobes.features.Fbank
+    n_mels: !ref <n_mels>
+    left_frames: !ref <left_frames>
+    right_frames: !ref <right_frames>
+    deltas: !ref <deltas>
+    sample_rate: !ref <sample_rate>
+    n_fft: !ref <n_fft>
+    win_length: !ref <win_length>
+    hop_length: !ref <hop_length>
+    f_min: !ref <f_min>
+
+mean_var_norm: !new:speechbrain.processing.features.InputNormalization
+    norm_type: sentence
+    std_norm: False
+
+embedding_model: !new:models.pann.Cnn14
+    mel_bins: !ref <n_mels>
+    emb_dim: !ref <emb_dim>
+    norm_type: !ref <emb_norm_type>
+
+modules:
+    compute_features: !ref <compute_features>
+    embedding_model: !ref <embedding_model>
+    mean_var_norm: !ref <mean_var_norm>
+
+opt_class: null
+
+epoch_counter_fn: !name:speechbrain.utils.epoch_loop.EpochCounter
+    limit: !ref <number_of_epochs>
+
+datapoint_counter: !new:utils.DatapointCounter
+      
+# # Logging + checkpoints
+checkpointer: !new:speechbrain.utils.checkpoints.Checkpointer
+    checkpoints_dir: !ref <save_folder>
+
+recoverables:
+    datapoint_counter: !ref <datapoint_counter>
+
+prev_checkpointer: null
+# prev_checkpointer: !new:speechbrain.utils.checkpoints.Checkpointer
+#     checkpoints_dir: !PLACEHOLDER
+
+ssl_checkpoints_dir: "/mnt/data/zhepei/outputs/cssl_sound/tdnn_supsiam_rep100/2022-02-26+21-55-19_seed_1234+sup100_ssl000_fold1/save"
+
+train_logger: !new:speechbrain.utils.train_logger.FileTrainLogger
+    save_file: !ref <train_log>
+
+# wandb
+use_wandb: False
+train_log_frequency: 20
+wandb_logger_fn: !name:utils.MyWandBLogger
+    initializer: !name:wandb.init
+    entity: CAL
+    project: cssl_sound
+    name: !ref <time_stamp>+seed_<seed>+<experiment_name>
+    dir: !ref <output_folder>
+    reinit: True
+    yaml_config: hparams/us8k/knn_eval.yaml
+    resume: False
+
