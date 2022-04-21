@@ -24,9 +24,15 @@ from dataset.cl_pipeline import (
 )
 from schedulers import SimSiamCosineScheduler
 from cl_table_tools import compute_cl_statistics
-
+import random
 import pdb
 
+# See https://pytorch.org/docs/stable/notes/randomness.html
+# and https://docs.nvidia.com/cuda/cublas/index.html#cublasApi_reproducibility
+torch.backends.cudnn.benchmark = False
+torch.backends.cudnn.deterministic = True
+torch.use_deterministic_algorithms(True)
+os.environ["CUBLAS_WORKSPACE_CONFIG"]=":4096:8"
 
 class LinearClassifier(sb.core.Brain):
     """
@@ -495,8 +501,12 @@ if __name__ == "__main__":
     if hparams['use_wandb']:
         hparams['train_logger'] = hparams['wandb_logger_fn']()
 
+    random.seed(hparams['seed'])
+    torch.cuda.manual_seed(hparams['seed'])
+    torch.cuda.manual_seed_all(hparams['seed'])
+
     # Initialize ddp (useful only for multi-GPU DDP training)
-    sb.utils.distributed.ddp_init_group(run_opts)
+    # sb.utils.distributed.ddp_init_group(run_opts)
 
     # Logger info
     logger = logging.getLogger(__name__)

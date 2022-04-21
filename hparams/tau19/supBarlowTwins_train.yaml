@@ -1,8 +1,8 @@
-# File              : linclf_train.yaml
-# Author            : Zhepei Wang <zhepeiw2@illinois.edu>
-# Date              : 27.01.2022
-# Last Modified Date: 08.04.2022
-# Last Modified By  : Zhepei Wang <zhepeiw2@illinois.edu>
+# File              : supBarlowTwins.py
+# Author            : Xilin Jiang <xilinj2@illinois.edu>
+# Date              : 04.03.2022
+# Last Modified Date: 07.04.2022
+# Last Modified By  : Xilin Jiang <xilinj2@illinois.edu>
 
 
 seed: 2022
@@ -13,59 +13,54 @@ resume_interrupt: False
 resume_task_idx: 0
 
 time_stamp: placeholder
-experiment_name: linclf
+experiment_name: BarlowTwins
 # output_folder: !ref results/<experiment_name>/<seed>
-output_base: /mnt/data/zhepei/outputs/cssl_sound/tdnn_linclf
+output_base: /mnt/data/zhepei/outputs/cssl_sound/tdnn_supBarlowTwins
 output_folder: !ref <output_base>/<time_stamp>_seed_<seed>+<experiment_name>
 train_log: !ref <output_folder>/train_log.txt
 save_folder: !ref <output_folder>/save
 
 # cont learning setup
-linclf_train_type: buffer
 task_classes:
-  # - !tuple (0, 1)
-  # - !tuple (2, 3)
-  # - !tuple (4, 5)
-  # - !tuple (6, 7)
-  # - !tuple (8, 9)
+#   - !tuple (0, 1)
+#   - !tuple (2, 3)
+#   - !tuple (4, 5)
+#   - !tuple (6, 7)
+#   - !tuple (8, 9)
   - !tuple (3, 8)
   - !tuple (9, 4)
   - !tuple (1, 7)
   - !tuple (5, 2)
   - !tuple (6, 0)
+
 # task_classes:
 #     - !tuple (0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
-replay_num_keep: 100
+replay_num_keep: 0
 
 use_mixup: False
 mixup_alpha: 0.4
+train_duration: 4.0
 
 # Training parameters
-number_of_epochs: 30
+number_of_epochs: 50
 batch_size: 32
-# lr: 0.001
-# base_lr: 0.00000001
-# max_lr: !ref <lr>
-# step_size: 65000
-warmup_epochs: 0
+
+loss_scale: 1 # !ref 1 / (<out_dim> * <out_dim>)
+max_lr: 0.03
+min_lr: 0.00000001
+warmup_epochs: 5
 warmup_lr: !ref <batch_size> * 0 / 256
-base_lr: !ref <batch_size> * 0.03 / 256
-final_lr: !ref <batch_size> * 0.00000001 / 256
+base_lr: !ref <batch_size> * <max_lr> / 256
+final_lr: !ref <batch_size> * <min_lr> / 256
 
 # dataset
 sample_rate: 16000
-data_folder: "/mnt/data/Sound Sets/UrbanSound8K/UrbanSound8K"
-train_folds: [1, 2, 3, 4, 5, 6, 7, 8]
-valid_folds: [9]
-test_folds: [10]
-label_encoder_path: "./dataset/label_encoder_us8k_ordered.txt"
-prepare_split_csv_fn: !name:dataset.prepare_urbansound8k.prepare_split_urbansound8k_csv
+data_folder: "/mnt/data/Sound Sets/TAU-urban-acoustic-scenes-2019-development"
+label_encoder_path: "./dataset/label_encoder_tauuas2019_ordered.txt"
+prepare_split_csv_fn: !name:dataset.prepare_tauuas2019.prepare_split_tauuas2019_csv
   root_dir: !ref <data_folder>
   output_dir: !ref <save_folder>
   task_classes: !ref <task_classes>
-  train_folds: !ref <train_folds>
-  valid_folds: !ref <valid_folds>
-  test_folds: !ref <test_folds>
 
 train_dataloader_opts:
   batch_size: !ref <batch_size>
@@ -81,7 +76,6 @@ valid_dataloader_opts:
 # Experiment params
 auto_mix_prec: True # Set it to True for mixed precision
 
-
 # Feature parameters
 n_mels: 80
 left_frames: 0
@@ -93,10 +87,39 @@ win_length: 25
 hop_length: 10
 n_fft: !ref <win_length> * <sample_rate> // 1000
 f_min: 0
+use_time_roll: False
+use_freq_shift: False
 # Number of classes
 n_classes: 10
 emb_dim: 2048
+out_dim: 8192
 emb_norm_type: bn
+
+# augmentation
+# time_domain_aug: !new:speechbrain.lobes.augment.TimeDomainSpecAugment
+#     sample_rate: !ref <sample_rate>
+#     # drop_chunk_count_high: 2
+#     # drop_chunk_noise_factor: 0.05
+#     speeds: [90, 95, 100, 105, 110]
+#     drop_freq_count_high: 4
+#     drop_chunk_count_high: 3
+#     # drop_chunk_length_low: 1000
+#     # drop_chunk_length_high: 5000
+spec_domain_aug: !new:augmentation.TFAugmentation
+    time_warp: True
+    time_warp_window: 8
+    freq_mask: True
+    freq_mask_width: !tuple (0, 10)
+    n_freq_mask: 2
+    time_mask: True
+    time_mask_width: !tuple (0, 10)
+    n_time_mask: 2
+    replace_with_zero: True
+    time_roll: !ref <use_time_roll>
+    time_roll_limit: !tuple (0, 200)
+    freq_shift: !ref <use_freq_shift>
+    freq_shift_limit: !tuple (-10, 10)
+
 
 # Functions
 compute_features: !new:speechbrain.lobes.features.Fbank
@@ -121,38 +144,46 @@ mean_var_norm: !new:speechbrain.processing.features.InputNormalization
 #     dilations: [1, 2, 3, 4, 1]
 #     attention_channels: 128
 #     lin_neurons: !ref <emb_dim>
-# embedding_model: !new:models.tdnn.ECAPA_TDNN
-#     input_size: !ref <n_mels>
-#     channels: [512, 512, 512, 1024]
-#     kernel_sizes: [5, 3, 3, 1]
-#     dilations: [1, 2, 3, 1]
-#     attention_channels: 128
-#     lin_neurons: !ref <emb_dim>
+    # channels: [512, 512, 512, 1024]
+    # kernel_sizes: [5, 3, 3, 1]
+    # dilations: [1, 2, 3, 1]
+    # attention_channels: 128
+    # lin_neurons: !ref <emb_dim>
 embedding_model: !new:models.pann.Cnn14
     mel_bins: !ref <n_mels>
     emb_dim: !ref <emb_dim>
     norm_type: !ref <emb_norm_type>
 
-# classifier_fn: !name:speechbrain.lobes.models.ECAPA_TDNN.Classifier
-#     input_size: !ref <emb_dim>
-#     out_neurons: !ref <n_classes>
+projector: !new:models.modules.SimSiamProjector
+    input_size: !ref <emb_dim>
+    hidden_size: !ref <out_dim>
+    output_size: !ref <out_dim>
 
-reinit_classifier: True
-classifier_fn: !name:models.modules.Classifier
+predictor: !new:models.modules.SimSiamPredictor
+    input_size: !ref <out_dim>
+    hidden_size: !ref <out_dim>
+
+classifier: !new:models.modules.Classifier
     input_size: !ref <emb_dim>
     output_size: !ref <n_classes>
 
 modules:
     compute_features: !ref <compute_features>
     embedding_model: !ref <embedding_model>
-    # classifier: !ref <classifier>
+    classifier: !ref <classifier>
+    projector: !ref <projector>
+    predictor: !ref <predictor>
     mean_var_norm: !ref <mean_var_norm>
 
-compute_cost: !new:losses.LogSoftmaxWithProbWrapper
+ssl_weight: 1.
+compute_BarlowTwins_cost: !new:losses.BarlowTwinsLoss
+    lambda_rr: 0.005
+    out_dim: !ref <out_dim>
+    loss_scale: !ref <loss_scale>
+
+sup_weight: 0.
+compute_sup_cost: !new:losses.LogSoftmaxWithProbWrapper
     loss_fn: !new:torch.nn.Identity
-    # loss_fn: !new:speechbrain.nnet.losses.AdditiveAngularMargin
-    #     margin: 0.2
-    #     scale: 30
 
 acc_metric: !name:speechbrain.utils.Accuracy.AccuracyStats
 
@@ -167,7 +198,7 @@ acc_metric: !name:speechbrain.utils.Accuracy.AccuracyStats
 
 opt_class: !name:torch.optim.SGD
     lr: !ref <base_lr>
-    weight_decay: 0
+    weight_decay: 0.0005
     momentum: 0.9
 
 lr_scheduler_fn: !name:schedulers.SimSiamCosineScheduler
@@ -176,7 +207,8 @@ lr_scheduler_fn: !name:schedulers.SimSiamCosineScheduler
     num_epochs: !ref <number_of_epochs>
     base_lr: !ref <base_lr>
     final_lr: !ref <final_lr>
-    steps_per_epoch: 222
+    steps_per_epoch: 200
+    constant_predictor_lr: True
 
 epoch_counter_fn: !name:speechbrain.utils.epoch_loop.EpochCounter
     limit: !ref <number_of_epochs>
@@ -188,16 +220,16 @@ checkpointer: !new:speechbrain.utils.checkpoints.Checkpointer
     checkpoints_dir: !ref <save_folder>
 
 recoverables:
-    # embedding_model: !ref <embedding_model>
-    # classifier: !ref <classifier>
-    # normalizer: !ref <mean_var_norm>
+    embedding_model: !ref <embedding_model>
+    classifier: !ref <classifier>
+    projector: !ref <projector>
+    predictor: !ref <predictor>
+    normalizer: !ref <mean_var_norm>
     datapoint_counter: !ref <datapoint_counter>
 
 prev_checkpointer: null
 # prev_checkpointer: !new:speechbrain.utils.checkpoints.Checkpointer
 #     checkpoints_dir: !PLACEHOLDER
-
-ssl_checkpoints_dir: "/mnt/data/zhepei/outputs/cssl_sound/tdnn_supsiam_rep100/2022-02-26+21-55-19_seed_1234+sup100_ssl000_fold1/save"
 
 train_logger: !new:speechbrain.utils.train_logger.FileTrainLogger
     save_file: !ref <train_log>
@@ -212,6 +244,5 @@ wandb_logger_fn: !name:utils.MyWandBLogger
     name: !ref <time_stamp>+seed_<seed>+<experiment_name>
     dir: !ref <output_folder>
     reinit: True
-    yaml_config: hparams/us8k/linclf_train.yaml
+    yaml_config: hparams/us8k/supclr_train.yaml
     resume: False
-
