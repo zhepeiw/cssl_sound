@@ -37,6 +37,36 @@ def prepare_task_csv_from_replay(
     return curr_buffer
 
 
+def prepare_epmem_csv_from_replay(
+    input_csv,
+    buffer,
+    num_keep='all',
+):
+    '''
+        prepare csv for each task with a rehearsal buffer
+        as episodic memory for A-GEM
+
+        args:
+            input_csv: str, path to the input csv
+            buffer: list of dicts
+    '''
+    rng = np.random.RandomState(1234)
+    df = pd.read_csv(input_csv, index_col=None)
+    curr_data = df.to_dict('records')
+    if num_keep == 'all':
+        curr_buffer = curr_data
+    else:
+        curr_buffer = rng.choice(
+            curr_data,
+            min(num_keep, len(curr_data)),
+            replace=False
+        ).tolist()
+    df_agg = pd.DataFrame(buffer)
+    df_agg['ID'] = np.arange(len(df_agg))
+    df_agg.to_csv(input_csv.replace('raw', 'epmem'), index=False)
+    return curr_buffer
+
+    
 def prepare_task_csv_from_subset(
     input_csv,
     buffer,
