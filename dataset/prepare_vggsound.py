@@ -23,7 +23,7 @@ def prepare_split_vggsound_csv(
     seed=1234,
 ):
     # collect all classes
-    class_names = sorted([os.path.basename(p) for p in glob.glob(os.path.join(root_dir,  'vgg-sound', 'train', '*'))])
+    class_names = sorted([os.path.basename(p) for p in glob.glob(os.path.join(root_dir,  'vgg-sound-16k', 'train', '*'))])
     all_paths = {
         name: glob.glob(os.path.join(root_dir, 'vgg-sound-16k/train', name, '*.ogg')) for name in class_names
     }
