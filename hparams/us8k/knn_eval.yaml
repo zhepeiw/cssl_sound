@@ -135,12 +135,12 @@ train_logger: !new:speechbrain.utils.train_logger.FileTrainLogger
     save_file: !ref <train_log>
 
 # wandb
-use_wandb: False
+use_wandb: True
 train_log_frequency: 20
 wandb_logger_fn: !name:utils.MyWandBLogger
     initializer: !name:wandb.init
-    entity: CAL
-    project: cssl_sound
+    entity: xi-j
+    project: cssl_sound_BT_ann
     name: !ref <time_stamp>+seed_<seed>+<experiment_name>
     dir: !ref <output_folder>
     reinit: True

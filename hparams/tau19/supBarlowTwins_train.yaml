@@ -244,5 +244,5 @@ wandb_logger_fn: !name:utils.MyWandBLogger
     name: !ref <time_stamp>+seed_<seed>+<experiment_name>
     dir: !ref <output_folder>
     reinit: True
-    yaml_config: hparams/tau19/supclr_train.yaml
+    yaml_config: hparams/tau19/supBarlowTwins_train.yaml
     resume: False
