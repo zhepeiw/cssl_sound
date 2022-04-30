@@ -108,14 +108,14 @@ class BarlowTwinsLoss(nn.Module):
         loss : torch.Tensor 
             Scalar Barlow Twins loss
         """ 
-        _, D = z1.shape
+        B, D = z1.shape
         z_1_norm = (z1 - z1.mean(0)) / (z1.std(0) + self.eps)
         z_2_norm = (z2 - z2.mean(0)) / (z2.std(0) + self.eps)
-        c = z_1_norm.T @ z_2_norm
+        c = z_1_norm.T @ z_2_norm / B
 
         on_diag = torch.diagonal(c).add_(-1).pow_(2).sum()
         off_diag = self.off_diagonal(c).pow_(2).sum()
 
         loss = on_diag + self.lambda_rr * off_diag
-        return self.loss_scale * loss / D / D
+        return self.loss_scale * loss
         # return loss / (c.shape[0]*c.shape[1]) * self.loss_scale
