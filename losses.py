@@ -48,6 +48,23 @@ class LogSoftmaxWithProbWrapper(nn.Module):
         return loss
 
 
+class LwFDistillationLoss(nn.Module):
+    '''
+        Distillation loss for LwF (logits)
+    '''
+    def __init__(self, tau=2):
+        super().__init__()
+        self.tau = tau
+        self.criterion = torch.nn.KLDivLoss(reduction="sum")
+
+    def forward(self, outputs, targets, length=None):
+        outputs = outputs.squeeze(1)
+        targets = targets.squeeze(1)
+        outputs_s = F.log_softmax(outputs / self.tau, dim=1)
+        targets_s = F.softmax(targets / self.tau, dim=1)
+        loss = self.criterion(outputs_s, targets_s) / targets.shape[0]
+        return loss
+
 class SimCLRLoss(nn.Module):
     '''
         Loss for SimCLR
