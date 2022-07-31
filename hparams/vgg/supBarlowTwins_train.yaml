@@ -22,10 +22,11 @@ save_folder: !ref <output_folder>/save
 
 # Number of classes
 n_classes: 308
+num_tasks: 10
 # cont learning setup
 task_classes: !apply:utils.prepare_task_classes
   num_classes: !ref <n_classes>
-  num_tasks: 5
+  num_tasks: !ref <num_tasks>
   seed: !ref <seed>
 replay_num_keep: 0
 
