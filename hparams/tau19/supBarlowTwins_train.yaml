@@ -42,13 +42,13 @@ mixup_alpha: 0.4
 train_duration: 4.0
 
 # Training parameters
-number_of_epochs: 50
+number_of_epochs: 100
 batch_size: 32
 
 loss_scale: 1 # !ref 1 / (<out_dim> * <out_dim>)
 max_lr: 0.03
 min_lr: 0.00000001
-warmup_epochs: 5
+warmup_epochs: 10
 warmup_lr: !ref <batch_size> * 0 / 256
 base_lr: !ref <batch_size> * <max_lr> / 256
 final_lr: !ref <batch_size> * <min_lr> / 256
