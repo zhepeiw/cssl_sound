@@ -1,8 +1,8 @@
-# File              : supBarlowTwins.py
-# Author            : Xilin Jiang <xilinj2@illinois.edu>
-# Date              : 04.03.2022
-# Last Modified Date: 07.04.2022
-# Last Modified By  : Xilin Jiang <xilinj2@illinois.edu>
+# File              : supclr_train.yaml
+# Author            : Zhepei Wang <zhepeiw2@illinois.edu>
+# Date              : 27.01.2022
+# Last Modified Date: 08.04.2022
+# Last Modified By  : Zhepei Wang <zhepeiw2@illinois.edu>
 
 
 seed: 2022
@@ -13,54 +13,61 @@ resume_interrupt: False
 resume_task_idx: 0
 
 time_stamp: placeholder
-experiment_name: BarlowTwins
+experiment_name: simsiam
 # output_folder: !ref results/<experiment_name>/<seed>
-output_base: /mnt/data/zhepei/outputs/cssl_sound/tdnn_supBarlowTwins
+output_base: /mnt/data/zhepei/outputs/cssl_sound/tdnn_supsiam
 output_folder: !ref <output_base>/<time_stamp>_seed_<seed>+<experiment_name>
 train_log: !ref <output_folder>/train_log.txt
 save_folder: !ref <output_folder>/save
 
 # cont learning setup
-task_classes:
-#   - !tuple (0, 1)
-#   - !tuple (2, 3)
-#   - !tuple (4, 5)
-#   - !tuple (6, 7)
-#   - !tuple (8, 9)
-  - !tuple (3, 8)
-  - !tuple (9, 4)
-  - !tuple (1, 7)
-  - !tuple (5, 2)
-  - !tuple (6, 0)
-
+n_classes: 10
+num_tasks: 10
+task_classes: !apply:utils.prepare_task_classes
+  num_classes: !ref <n_classes>
+  num_tasks: !ref <num_tasks>
+  seed: !ref <seed>
 # task_classes:
 #     - !tuple (0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 replay_num_keep: 0
 
 use_mixup: False
 mixup_alpha: 0.4
-train_duration: 4.0
+train_duration: 2.0
 
 # Training parameters
-number_of_epochs: 100
+number_of_epochs: 50
 batch_size: 32
-
-loss_scale: 1 # !ref 1 / (<out_dim> * <out_dim>)
-max_lr: 0.03
-min_lr: 0.00000001
-warmup_epochs: 10
+# lr: 0.001
+# base_lr: 0.00000001
+# max_lr: !ref <lr>
+# step_size: 65000
+warmup_epochs: 5
 warmup_lr: !ref <batch_size> * 0 / 256
-base_lr: !ref <batch_size> * <max_lr> / 256
-final_lr: !ref <batch_size> * <min_lr> / 256
+base_lr: !ref <batch_size> * 0.03 / 256
+final_lr: !ref <batch_size> * 0.00000001 / 256
 
 # dataset
 sample_rate: 16000
-data_folder: "/mnt/data/Sound Sets/TAU-urban-acoustic-scenes-2019-development"
-label_encoder_path: "./dataset/label_encoder_tauuas2019_ordered.txt"
-prepare_split_csv_fn: !name:dataset.prepare_tauuas2019.prepare_split_tauuas2019_csv
+data_folder: "/mnt/data/Sound Sets/UrbanSound8K/UrbanSound8K"
+train_folds: [1, 2, 3, 4, 5, 6, 7, 8]
+valid_folds: [9]
+test_folds: [10]
+label_encoder_path: "./dataset/label_encoder_us8k_ordered.txt"
+prepare_split_csv_fn: !name:dataset.prepare_urbansound8k.prepare_split_urbansound8k_csv
   root_dir: !ref <data_folder>
   output_dir: !ref <save_folder>
   task_classes: !ref <task_classes>
+  train_folds: !ref <train_folds>
+  valid_folds: !ref <valid_folds>
+  test_folds: !ref <test_folds>
+
+# data_folder: "/mnt/data/Sound Sets/TAU-urban-acoustic-scenes-2019-development"
+# label_encoder_path: "./dataset/label_encoder_tauuas2019_ordered.txt"
+# prepare_split_csv_fn: !name:dataset.prepare_tauuas2019.prepare_split_tauuas2019_csv
+#   root_dir: !ref <data_folder>
+#   output_dir: !ref <save_folder>
+#   task_classes: !ref <task_classes>
 
 train_dataloader_opts:
   batch_size: !ref <batch_size>
@@ -73,8 +80,10 @@ valid_dataloader_opts:
   num_workers: 8
 
 
+
 # Experiment params
 auto_mix_prec: True # Set it to True for mixed precision
+
 
 # Feature parameters
 n_mels: 80
@@ -90,10 +99,9 @@ f_min: 0
 use_time_roll: False
 use_freq_shift: False
 # Number of classes
-n_classes: 10
 emb_dim: 2048
-out_dim: 8192
 emb_norm_type: bn
+proj_norm_type: bn
 
 # augmentation
 # time_domain_aug: !new:speechbrain.lobes.augment.TimeDomainSpecAugment
@@ -144,11 +152,11 @@ mean_var_norm: !new:speechbrain.processing.features.InputNormalization
 #     dilations: [1, 2, 3, 4, 1]
 #     attention_channels: 128
 #     lin_neurons: !ref <emb_dim>
-    # channels: [512, 512, 512, 1024]
-    # kernel_sizes: [5, 3, 3, 1]
-    # dilations: [1, 2, 3, 1]
-    # attention_channels: 128
-    # lin_neurons: !ref <emb_dim>
+# #     # channels: [512, 512, 512, 1024]
+# #     # kernel_sizes: [5, 3, 3, 1]
+# #     # dilations: [1, 2, 3, 1]
+# #     # attention_channels: 128
+# #     # lin_neurons: !ref <emb_dim>
 embedding_model: !new:models.pann.Cnn14
     mel_bins: !ref <n_mels>
     emb_dim: !ref <emb_dim>
@@ -156,12 +164,14 @@ embedding_model: !new:models.pann.Cnn14
 
 projector: !new:models.modules.SimSiamProjector
     input_size: !ref <emb_dim>
-    hidden_size: !ref <out_dim>
-    output_size: !ref <out_dim>
+    hidden_size: !ref <emb_dim>
+    output_size: !ref <emb_dim>
+    norm_type: !ref <proj_norm_type>
 
 predictor: !new:models.modules.SimSiamPredictor
-    input_size: !ref <out_dim>
-    hidden_size: !ref <out_dim>
+    input_size: !ref <emb_dim>
+    hidden_size: !ref <emb_dim> // 4
+    norm_type: !ref <proj_norm_type>
 
 classifier: !new:models.modules.Classifier
     input_size: !ref <emb_dim>
@@ -175,13 +185,11 @@ modules:
     predictor: !ref <predictor>
     mean_var_norm: !ref <mean_var_norm>
 
-ssl_weight: 1.
-compute_BarlowTwins_cost: !new:losses.BarlowTwinsLoss
-    lambda_rr: 0.005
-    out_dim: !ref <out_dim>
-    loss_scale: !ref <loss_scale>
+ssl_weight: 0.
+compute_simclr_cost: !new:losses.SimCLRLoss
+    tau: 0.5
 
-sup_weight: 0.
+sup_weight: 1.
 compute_sup_cost: !new:losses.LogSoftmaxWithProbWrapper
     loss_fn: !new:torch.nn.Identity
 
@@ -244,5 +252,6 @@ wandb_logger_fn: !name:utils.MyWandBLogger
     name: !ref <time_stamp>+seed_<seed>+<experiment_name>
     dir: !ref <output_folder>
     reinit: True
-    yaml_config: hparams/tau19/supBarlowTwins_train.yaml
+    yaml_config: hparams/us8k/supclr_train.yaml
     resume: False
+

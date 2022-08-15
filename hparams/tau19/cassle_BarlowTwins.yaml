@@ -1,7 +1,7 @@
-# File              : supBarlowTwins.py
+# File              : cassle_BarlowTwins.yaml
 # Author            : Xilin Jiang <xilinj2@illinois.edu>
-# Date              : 04.03.2022
-# Last Modified Date: 07.04.2022
+# Date              : 11.08.2022
+# Last Modified Date: 11.08.2022
 # Last Modified By  : Xilin Jiang <xilinj2@illinois.edu>
 
 
@@ -40,6 +40,7 @@ replay_num_keep: 0
 use_mixup: False
 mixup_alpha: 0.4
 train_duration: 4.0
+dist_set: null
 
 # Training parameters
 number_of_epochs: 100
@@ -94,6 +95,7 @@ n_classes: 10
 emb_dim: 2048
 out_dim: 8192
 emb_norm_type: bn
+proj_norm_type: bn
 
 # augmentation
 # time_domain_aug: !new:speechbrain.lobes.augment.TimeDomainSpecAugment
@@ -167,6 +169,18 @@ classifier: !new:models.modules.Classifier
     input_size: !ref <emb_dim>
     output_size: !ref <n_classes>
 
+prev_embedding_model_fn: !name:models.pann.Cnn14
+    mel_bins: !ref <n_mels>
+    emb_dim: !ref <emb_dim>
+    norm_type: !ref <emb_norm_type>
+
+prev_predictor_fn: !name:models.modules.CasslePredictor
+    input_size: !ref <emb_dim>
+    hidden_size: !ref <emb_dim>
+    bottleneck_size: !ref <emb_dim> // 4
+    output_size: !ref <emb_dim>
+    norm_type: !ref <proj_norm_type>
+
 modules:
     compute_features: !ref <compute_features>
     embedding_model: !ref <embedding_model>
@@ -184,6 +198,11 @@ compute_BarlowTwins_cost: !new:losses.BarlowTwinsLoss
 sup_weight: 0.
 compute_sup_cost: !new:losses.LogSoftmaxWithProbWrapper
     loss_fn: !new:torch.nn.Identity
+
+dist_weight: 1.
+# compute_dist_cost: !new:losses.BarlowTwinsLoss
+#     tau: 0.5
+compute_dist_cost: !new:torch.nn.MSELoss
 
 acc_metric: !name:speechbrain.utils.Accuracy.AccuracyStats
 
