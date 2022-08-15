@@ -143,9 +143,19 @@ class SupMOCO(sb.core.Brain):
         #      zero_sig[:, 0 : wavs_aug.shape[1]] = wavs_aug
         #      wavs_aug = zero_sig
         #  wavs = wavs_aug
-
+        
+        
+        # vgg
+        """
+        with torch.cuda.amp.autocast(enabled=False):
+            feats = self.modules.compute_features(wavs)  # [B, T, D]
+            feats = self.hparams.spec_domain_aug(feats, lens)
+        """
+        
+        # others
         feats = self.modules.compute_features(wavs)  # [B, T, D]
         feats = self.hparams.spec_domain_aug(feats, lens)
+            
         if self.hparams.amp_to_db:
             Amp2db = torchaudio.transforms.AmplitudeToDB(
                 stype="power", top_db=80
