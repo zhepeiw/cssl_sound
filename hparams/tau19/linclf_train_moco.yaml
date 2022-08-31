@@ -15,7 +15,8 @@ resume_task_idx: 0
 time_stamp: placeholder
 experiment_name: linclf
 # output_folder: !ref results/<experiment_name>/<seed>
-output_base: /mnt/data/junkai/outputs/cssl_sound/moco_tau19
+# output_base: /mnt/data/junkai/outputs/cssl_sound/moco_tau19
+output_base: /home/junkai2/outputs/cssl_sound/moco_tau19
 output_folder: !ref <output_base>/<time_stamp>_seed_<seed>+<experiment_name>
 train_log: !ref <output_folder>/train_log.txt
 save_folder: !ref <output_folder>/save
