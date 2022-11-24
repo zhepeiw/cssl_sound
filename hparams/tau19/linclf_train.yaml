@@ -51,6 +51,7 @@ warmup_epochs: 0
 warmup_lr: !ref <batch_size> * 0 / 256
 base_lr: !ref <batch_size> * 0.03 / 256
 final_lr: !ref <batch_size> * 0.00000001 / 256
+freeze_encoder: True
 
 # dataset
 sample_rate: 16000
@@ -67,7 +68,7 @@ sample_rate: 16000
 #   valid_folds: !ref <valid_folds>
 #   test_folds: !ref <test_folds>
 
-data_folder: "/mnt/data/Sound Sets/TAU-urban-acoustic-scenes-2019-development"
+data_folder: "/mnt/data2/Sound Sets/TAU-urban-acoustic-scenes-2019-development"
 label_encoder_path: "./dataset/label_encoder_tauuas2019_ordered.txt"
 prepare_split_csv_fn: !name:dataset.prepare_tauuas2019.prepare_split_tauuas2019_csv
   root_dir: !ref <data_folder>

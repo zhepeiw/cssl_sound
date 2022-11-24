@@ -51,12 +51,13 @@ def prepare_split_urbansound8k_csv(
         class_id = row['classID']
         class_name = row['class']
         fname = os.path.join(root_dir, 'audio', 'fold{}'.format(fold), row['slice_file_name'])
-        if fold in train_folds:
-            train_splits[class2task[class_id]].append((fname, class_id, class_name))
-        if fold in valid_folds:
-            valid_splits[class2task[class_id]].append((fname, class_id, class_name))
-        if fold in test_folds:
-            test_splits[class2task[class_id]].append((fname, class_id, class_name))
+        if class_id in class2task:
+            if fold in train_folds:
+                train_splits[class2task[class_id]].append((fname, class_id, class_name))
+            if fold in valid_folds:
+                valid_splits[class2task[class_id]].append((fname, class_id, class_name))
+            if fold in test_folds:
+                test_splits[class2task[class_id]].append((fname, class_id, class_name))
     # training csv for each task
     for split, split_data in zip(['train', 'valid', 'test'], [train_splits, valid_splits, test_splits]):
         for task_idx in range(num_tasks):

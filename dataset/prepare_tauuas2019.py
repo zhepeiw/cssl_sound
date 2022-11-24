@@ -55,8 +55,9 @@ def prepare_split_tauuas2019_csv(
                 class_name = row['scene_label']
             else:
                 class_name = os.path.basename(fname).split('-')[0]
-            task_id = class2task[name2idx[class_name]]
-            splits[task_id].append((fname, class_name))
+            if name2idx[class_name] in class2task:
+                task_id = class2task[name2idx[class_name]]
+                splits[task_id].append((fname, class_name))
 
     # training csv for each task
     for split, split_data in zip(['train', 'valid', 'test'], [train_splits, valid_splits, test_splits]):

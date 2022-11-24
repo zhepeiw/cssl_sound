@@ -599,20 +599,22 @@ if __name__ == "__main__":
             print("==> Resuming from interrupted checkpointer at {}".format(hparams['checkpointer'].checkpoints_dir))
             hparams['resume_interrupt'] = False
 
-        # load weights from pretrained embedder and normalizer
-        ssl_checkpointer = sb.utils.checkpoints.Checkpointer(
-            os.path.join(hparams['ssl_checkpoints_dir'], 'task{}'.format(task_idx)),
-            recoverables={
-                'embedding_model': hparams['embedding_model'],
-                'normalizer': hparams['mean_var_norm'],
-            },
-        )
-        ssl_checkpointer.recover_if_possible(
-            #  min_key='loss',
-        )
-        for p in hparams['embedding_model'].parameters():
-            p.requires_grad = False
-        print("==> Recovering embedder checkpointer at {}".format(ssl_checkpointer.checkpoints_dir))
+        if hparams['ssl_checkpoints_dir'] is not None:
+            # load weights from pretrained embedder and normalizer
+            ssl_checkpointer = sb.utils.checkpoints.Checkpointer(
+                os.path.join(hparams['ssl_checkpoints_dir'], 'task{}'.format(task_idx)),
+                recoverables={
+                    'embedding_model': hparams['embedding_model'],
+                    'normalizer': hparams['mean_var_norm'],
+                },
+            )
+            ssl_checkpointer.recover_if_possible(
+                #  min_key='loss',
+            )
+            print("==> Recovering embedder checkpointer at {}".format(ssl_checkpointer.checkpoints_dir))
+        if hparams['freeze_encoder']:
+            for p in hparams['embedding_model'].parameters():
+                p.requires_grad = False
 
         # TODO: generate task-wise data
         if hparams['linclf_train_type']  == 'buffer':

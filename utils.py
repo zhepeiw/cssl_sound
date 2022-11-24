@@ -87,4 +87,6 @@ def prepare_task_classes(num_classes, num_tasks, seed=1234):
         rng.shuffle(arr)
     task_classes = np.array_split(arr, num_tasks)
     task_classes = [tuple(e) for e in task_classes]
+    #  TODO: taking final
+    task_classes = task_classes[-1:]
     return task_classes
