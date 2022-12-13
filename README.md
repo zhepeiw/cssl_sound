@@ -1,4 +1,5 @@
 # Continaul Self-Supervised Learning (CSSL) for Sound Classification
+This is the code base for the paper ["Learning Representations for New Sound Classes With Continual Self-Supervised Learning"](https://arxiv.org/abs/2205.07390). This paper is accepted by the IEEE Signal Processing Letters.
 
 ## Requirements
   - pytorch == 1.10.0
@@ -10,6 +11,39 @@
 
 
 ## Experiments
+### UrbanSound8K
+We produce the scripts for reproducing the supervised and self-supervised experiments for the class-incremental representation learning. The following command will run the encoder training using the simclr objective on the UrbanSound8K dataset:
+
+```bash
+python supclr_train.py hparams/us8k/supclr_train.yaml --output_base <ENCODER_OUTPUT_DIR> --replay_num_keep=0 --use_mixup=False --ssl_weight=1 --sup_weight=0 --train_duration=2.0 --emb_norm_type=bn --proj_norm_type=bn --batch_size=32 --experiment_name=<NAME>
+```
+
+And all configurations can be modified at `./hparams/us8k/supclr_train.yaml`. Make sure to configure the path to the datasets properly. After the encoder is trained, use the linear evaluation script to measure the performance of the learned representations:
+
+```bash
+python linclf_train.py hparams/us8k/linclf_train.yaml --output_base <EVAL_OUTPUT_DIR> --linclf_train_type=seen --replay_num_keep=all --ssl_checkpoints_dir=<PATH_TO_ENCODER_CKPT> --emb_norm_type bn --experiment_name=<NAME>
+```
+Here, the `<PATH_TO_ENCODER_CKPT>` should be identical to the `<ENCODER_OUTPUT_DIR>` with a `/save` suffix. The script will look for the task-wise encoder checkpoint under this directory when evaluating on each task. The `linclf_train_type` is set as `seen`, which will perform linear evaluation protocol (LEP). It can be assigned a value of `subset`, which will instead perform subset linear evaluation protocol (SLEP).
+
+### DCASE TAU19
+For encoder training, run
+```bash
+python supclr_train.py hparams/tau19/supclr_train.yaml --output_base <ENCODER_OUTPUT_DIR> --replay_num_keep=0 --use_mixup=False --ssl_weight=1 --sup_weight=0 --train_duration=4.0 --emb_norm_type bn --proj_norm_type bn --batch_size=32 --experiment_name=<NAME>
+```
+
+For in-domain linear evaluation, run
+```bash
+python linclf_train.py hparams/tau19/linclf_train.yaml --output_base <EVAL_OUTPUT_DIR> --linclf_train_type=seen --ssl_checkpoints_dir=<PATH_TO_ENCODER_CKPT> --emb_norm_type bn --experiment_name=<NAME>
+```
+
+### VGGSound
+For encoder training, run
+```bash
+python supclr_train.py hparams/vgg/supclr_train.yaml --output_base <ENCODER_OUTPUT_DIR> --replay_num_keep=0 --use_mixup=False --ssl_weight=1 --sup_weight=0 --train_duration=4.0 --emb_norm_type bn --proj_norm_type bn --batch_size=32 --experiment_name=<NAME>
+```
+
+## (Deprecated) Sample Commands
+The following section may be outdated, and please refer to the Experiments section.
 ### Supervised Training
 
 To run the supervised class-incremental experiment, run
