@@ -11,6 +11,7 @@ import speechbrain as sb
 from speechbrain.utils.distributed import run_on_main
 from dataset.prepare_urbansound8k import prepare_split_urbansound8k_csv
 from tqdm import tqdm
+import copy
 from sklearn.metrics import confusion_matrix
 import wandb
 from confusion_matrix_fig import create_cm_fig
@@ -22,92 +23,11 @@ from schedulers import SimSiamCosineScheduler
 
 import pdb
 
-import copy
 
-
-class SupMOCO(sb.core.Brain):
+class SupBarlowTwins(sb.core.Brain):
     """
         Brain class for classifier with supervised training
     """
-    def init_moco(self, k=512, m=0.99, t=0.3):
-        """Initiates queue, key encoder, loss function, key encoder update function, queue update function
-        Arguments
-        ---------
-        k : size of queue
-        m : moco momentum for updating key encoder
-        t : temperature for contrastive loss
-        """
-
-        self.queue_len = k
-        self.moco_momentum = m
-        self.temperature = t
-        self.criterion = torch.nn.CrossEntropyLoss()
-
-        queue = torch.randn(self.hparams.emb_dim, k, requires_grad=False)
-        queue = F.normalize(queue, dim=0)
-
-        self.queue = queue.to(self.device)
-
-        self.key_embedding_model = copy.deepcopy(self.modules.embedding_model)
-        self.key_projector = copy.deepcopy(self.modules.projector)
-        #self.key_predictor = copy.deepcopy(self.modules.predictor)
-
-        for param_k in self.key_embedding_model.parameters():
-            param_k.requires_grad = False
-        
-        for param_k in self.key_projector.parameters():
-            param_k.requires_grad = False
-        
-        """
-        for param_k in self.key_predictor.parameters():
-            param_k.requires_grad = False
-        """
-    
-    @torch.no_grad()
-    def reset_queue(self):
-        queue = torch.randn(self.hparams.emb_dim, self.queue_len, requires_grad=False)
-        queue = F.normalize(queue, dim=0)
-
-        self.queue = queue.to(self.device)
-    
-    @torch.no_grad()
-    def update_queue(self, keys):
-        batch_size = keys.shape[0]
-        self.queue = torch.roll(self.queue, -batch_size, 1)
-        self.queue[:, -batch_size:].data = (keys.T).data
-
-    @torch.no_grad()
-    def key_encoder_update(self):
-        for param_q, param_k in zip(self.modules.embedding_model.parameters(), self.key_embedding_model.parameters()):
-            param_k.data = param_k.data * self.moco_momentum + param_q.data * (1. - self.moco_momentum)
-        
-        for param_q, param_k in zip(self.modules.projector.parameters(), self.key_projector.parameters()):
-            param_k.data = param_k.data * self.moco_momentum + param_q.data * (1. - self.moco_momentum)
-        """
-        for param_q, param_k in zip(self.modules.predictor.parameters(), self.key_predictor.parameters()):
-            param_k.data = param_k.data * self.moco_momentum + param_q.data * (1. - self.moco_momentum)
-        """
-
-    @torch.no_grad()
-    def batch_shuffle(self, x):
-        """
-        Batch shuffle, for making use of BatchNorm.
-        """
-        # random shuffle index
-        idx_shuffle = torch.randperm(x.shape[0]).cuda()
-
-        # index for restoring
-        idx_unshuffle = torch.argsort(idx_shuffle)
-
-        return x[idx_shuffle], idx_unshuffle
-
-    @torch.no_grad()
-    def batch_unshuffle(self, x, idx_unshuffle):
-        """
-        Undo batch shuffle.
-        """
-        return x[idx_unshuffle]
-
     def compute_forward(self, batch, stage):
         batch = batch.to(self.device)
         wavs1, lens = batch.sig1
@@ -116,22 +36,48 @@ class SupMOCO(sb.core.Brain):
         x1 = self.prepare_features(wavs1, lens, stage)
         x2 = self.prepare_features(wavs2, lens, stage)
         # Embeddings
-        #q = self.modules.predictor(self.modules.projector(self.modules.embedding_model(x1)))
-        h = self.modules.embedding_model(x1)
-        q = self.modules.projector(h)
-        #q = F.normalize(q, dim=2)
-
-        with torch.no_grad():  # no gradient to keys
-            self.key_encoder_update()
-            #k = self.key_predictor(self.key_projector(self.key_embedding_model(x2)))
-            x2_, idx_unshuffle = self.batch_shuffle(x2)
-            k = self.key_projector(self.key_embedding_model(x2_))
-            #k = F.normalize(k, dim=2)
-            k = self.batch_unshuffle(k, idx_unshuffle)
-
-        o = self.modules.classifier(h) # [B, 1, C]
-
-        return q.squeeze(1), k.squeeze(1), o, lens
+        e1 = self.modules.embedding_model(x1)
+        e2 = self.modules.embedding_model(x2)
+        h1 = self.modules.projector(e1)  # [B, 1, D]
+        h2 = self.modules.projector(e2)  # [B, 1, D]
+        z1 = self.modules.predictor(h1)  # [B, 1, D]
+        z2 = self.modules.predictor(h2)  # [B, 1, D]
+        o1 = self.modules.classifier(e1) # [B, 1, C]
+        if self.hparams.prev_embedding_model is not None:
+            self.modules.prev_embedding_model.eval()
+            if batch.dist_sig1[0] is not None:
+                dist_wavs1, dist_lens = batch.dist_sig1
+                dist_wavs2, _ = batch.dist_sig2
+                dist_x1 = self.prepare_features(dist_wavs1, dist_lens, stage)
+                dist_x2 = self.prepare_features(dist_wavs2, dist_lens, stage)
+                e1_prev = self.modules.prev_embedding_model(dist_x1)
+                e2_prev = self.modules.prev_embedding_model(dist_x2)
+                dist_e1 = self.modules.embedding_model(dist_x1)
+                dist_e2 = self.modules.embedding_model(dist_x2)
+                e1_hat = self.modules.prev_predictor(dist_e1)
+                e2_hat = self.modules.prev_predictor(dist_e2)
+            else:
+                e1_prev = self.modules.prev_embedding_model(x1)
+                e2_prev = self.modules.prev_embedding_model(x2)
+                e1_hat = self.modules.prev_predictor(e1)
+                e2_hat = self.modules.prev_predictor(e2)
+            return {
+                'z1': z1,
+                'z2': z2,
+                'o1': o1,
+                'e1_hat': e1_hat,
+                'e2_hat': e2_hat,
+                'e1_prev': e1_prev.detach(),
+                'e2_prev': e2_prev.detach(),
+                'lens': lens,
+            }
+        else:
+            return {
+                'z1': z1,
+                'z2': z2,
+                'o1': o1,
+                'lens': lens,
+            }
 
     def prepare_features(self, wavs, lens, stage):
         # time domain augmentation
@@ -143,19 +89,9 @@ class SupMOCO(sb.core.Brain):
         #      zero_sig[:, 0 : wavs_aug.shape[1]] = wavs_aug
         #      wavs_aug = zero_sig
         #  wavs = wavs_aug
-        
-        
-        # vgg
-        """
-        with torch.cuda.amp.autocast(enabled=False):
-            feats = self.modules.compute_features(wavs)  # [B, T, D]
-            feats = self.hparams.spec_domain_aug(feats, lens)
-        """
-        
-        # others
+
         feats = self.modules.compute_features(wavs)  # [B, T, D]
         feats = self.hparams.spec_domain_aug(feats, lens)
-            
         if self.hparams.amp_to_db:
             Amp2db = torchaudio.transforms.AmplitudeToDB(
                 stype="power", top_db=80
@@ -168,39 +104,42 @@ class SupMOCO(sb.core.Brain):
         return feats
 
     def compute_objectives(self, predictions, batch, stage):
-        q, k, o, lens = predictions
-
-        l_pos = torch.einsum('nc,nc->n', [q, k]).unsqueeze(-1)
-        l_neg = torch.einsum('nc,ck->nk', [q, self.queue.clone().detach()])
-
-        logits = torch.cat([l_pos, l_neg], dim=1)
-        logits /= self.temperature
-
-        # labels: positive key indicators
-        labels = torch.zeros(logits.shape[0], dtype=torch.long).to(self.device)
-
-        self.update_queue(k)
-
-        ssl_loss = self.criterion(logits, labels)
-
+        z1, z2 = predictions['z1'], predictions['z2']
+        lens = predictions['lens']
+        # SSL loss
+        ssl_loss = self.hparams.compute_BarlowTwins_cost(z1.squeeze(), z2.squeeze())
+        # supervised loss
+        o1 = predictions['o1']
         if self.hparams.use_mixup and stage == sb.Stage.TRAIN:
             targets, _ = batch.label_prob
         else:
             targets, _ = batch.class_string_encoded # [bs, 1]
-            targets = F.one_hot(targets, o.shape[-1]).float()  # [bs, 1, C]
-
-        sup_loss = self.hparams.compute_sup_cost(o, targets, lens)
-        loss = self.hparams.sup_weight * sup_loss + self.hparams.ssl_weight * ssl_loss
+            targets = F.one_hot(targets, o1.shape[-1]).float()  # [bs, 1, C]
+        sup_loss = self.hparams.compute_sup_cost(o1, targets, lens)
+        # distillation loss
+        if self.hparams.prev_embedding_model is not None:
+            e1_hat, e2_hat = predictions['e1_hat'], predictions['e2_hat']
+            e1_prev, e2_prev = predictions['e1_prev'], predictions['e2_prev']
+            dist_loss_1 = self.hparams.compute_dist_cost(e1_hat.squeeze(1),
+                                                         e1_prev.squeeze(1))
+            dist_loss_2 = self.hparams.compute_dist_cost(e2_hat.squeeze(1),
+                                                         e2_prev.squeeze(1))
+            dist_loss = 0.5 * (dist_loss_1 + dist_loss_2)
+        else:
+            dist_loss = torch.zeros(1).to(ssl_loss.device)
+        loss = self.hparams.sup_weight * sup_loss \
+                + self.hparams.ssl_weight * ssl_loss \
+                + self.hparams.dist_weight * dist_loss
 
         loss_dict = {
             'ssl': ssl_loss,
             'sup': sup_loss,
+            'dist': dist_loss,
         }
 
         if stage == sb.Stage.TRAIN and \
            hasattr(self.hparams.lr_scheduler, "on_batch_end"):
             self.hparams.lr_scheduler.on_batch_end(self.optimizer)
-        
         return loss, loss_dict
 
     def fit_batch(self, batch):
@@ -378,7 +317,7 @@ class SupMOCO(sb.core.Brain):
             )
 
 
-def dataio_ssl_prep(hparams, csv_path, label_encoder):
+def dataio_ssl_prep(hparams, csv_path, label_encoder, dist_list=None):
     "Creates the datasets and their data processing pipelines."
 
     config_sample_rate = hparams["sample_rate"]
@@ -392,13 +331,7 @@ def dataio_ssl_prep(hparams, csv_path, label_encoder):
         rstart = torch.randint(0, len(sig) - target_len + 1, (1,)).item()
         return sig[rstart:rstart+target_len]
 
-    # 2. Define audio pipeline:
-    @sb.utils.data_pipeline.takes("wav_path")
-    @sb.utils.data_pipeline.provides("sig1", "sig2")
-    def audio_pipeline(wav_path):
-        """Load the signal, and pass it and its length to the corruption class.
-        This is done on the CPU in the `collate_fn`."""
-
+    def read_sig(wav_path):
         sig, read_sr = torchaudio.load(wav_path)
 
         # If multi-channels, downmix it to a mono channel
@@ -415,12 +348,44 @@ def dataio_ssl_prep(hparams, csv_path, label_encoder):
                 )
             # Resample audio
             sig = hparams["resampler"].forward(sig)
-
         # scaling
         max_amp = torch.abs(sig).max().item()
         #  assert max_amp > 0
         scaling = 1 / max_amp * 0.9
         sig = scaling * sig
+        return sig
+
+    # 2. Define audio pipeline:
+    @sb.utils.data_pipeline.takes("wav_path")
+    @sb.utils.data_pipeline.provides("sig1", "sig2", "dist_sig1", "dist_sig2")
+    def audio_pipeline(wav_path):
+        """Load the signal, and pass it and its length to the corruption class.
+        This is done on the CPU in the `collate_fn`."""
+
+        #  sig, read_sr = torchaudio.load(wav_path)
+        #
+        #  # If multi-channels, downmix it to a mono channel
+        #  sig = torch.squeeze(sig)
+        #  if len(sig.shape) > 1:
+        #      sig = torch.mean(sig, dim=0)
+        #
+        #  # Convert sample rate to required config_sample_rate
+        #  if read_sr != config_sample_rate:
+        #      # Re-initialize sampler if source file sample rate changed compared to last file
+        #      if read_sr != hparams["resampler"].orig_freq:
+        #          hparams["resampler"] = torchaudio.transforms.Resample(
+        #              orig_freq=read_sr, new_freq=config_sample_rate
+        #          )
+        #      # Resample audio
+        #      sig = hparams["resampler"].forward(sig)
+        #
+        #  # scaling
+        #  max_amp = torch.abs(sig).max().item()
+        #  #  assert max_amp > 0
+        #  scaling = 1 / max_amp * 0.9
+        #  sig = scaling * sig
+
+        sig = read_sig(wav_path)
 
         target_len = int(hparams["train_duration"] * config_sample_rate)
         if len(sig) > target_len:
@@ -431,6 +396,21 @@ def dataio_ssl_prep(hparams, csv_path, label_encoder):
             sig2 = sig.clone()
         yield sig1
         yield sig2
+        # distillation dataset
+        if dist_list is None or len(dist_list) == 0:
+            yield None
+            yield None
+        else:
+            dist_dict = hparams['np_rng'].choice(dist_list, size=1)[0]
+            dist_sig = read_sig(dist_dict['wav_path'])
+            if len(dist_sig) > target_len:
+                dist_sig1 = random_segment(dist_sig, target_len)
+                dist_sig2 = random_segment(dist_sig, target_len)
+            else:
+                dist_sig1 = dist_sig
+                dist_sig2 = dist_sig.clone()
+            yield dist_sig1
+            yield dist_sig2
 
     # 3. Define label pipeline:
     @sb.utils.data_pipeline.takes("class_name")
@@ -445,36 +425,10 @@ def dataio_ssl_prep(hparams, csv_path, label_encoder):
     ds = sb.dataio.dataset.DynamicItemDataset.from_csv(
         csv_path=csv_path,
         dynamic_items=[audio_pipeline, label_pipeline],
-        output_keys=["id", "sig1", "sig2", "class_string_encoded"]
+        output_keys=["id", "sig1", "sig2", "dist_sig1", "dist_sig2", "class_string_encoded"]
     )
 
     return ds
-
-"""
-python supmoco_train.py hparams/us8k/supmoco_train.yaml --output_base /home/junkaiwu/outputs/cssl_sound/moco_CL_2  --train_folds=[1,3,4,5,6,7,8,9,10] --valid_folds=[2] --test_folds=[2] --replay_num_keep=0 --use_mixup False --ssl_weight=1.0 --sup_weight=0.0 --train_duration=2.0 --emb_norm_type sbn --proj_norm_type sbn --experiment_name moco9256_shuffled_10_00_fold2 --moco_momentum 0.9 --moco_temp 0.3 --moco_dict_size 256 --num_splits 4
-
-python supmoco_train.py hparams/us8k/supmoco_train.yaml --output_base /home/junkaiwu/outputs/cssl_sound/moco_CL_2  --train_folds=[1,3,4,5,6,7,8,9,10] --valid_folds=[2] --test_folds=[2] --replay_num_keep=0 --use_mixup False --ssl_weight=0.0 --sup_weight=1.0 --train_duration=2.0 --emb_norm_type sbn --proj_norm_type sbn --experiment_name moco9256_shuffled_00_10_fold2 --moco_momentum 0.9 --moco_temp 0.3 --moco_dict_size 256 --num_splits 4
-
-python linclf_train.py hparams/us8k/linclf_train_moco.yaml --output_base /home/junkaiwu/outputs/cssl_sound/moco_CL_2 --train_folds=[1,3,4,5,6,7,8,9,10] --valid_folds=[2] --test_folds=[2] --linclf_train_type seen --ssl_checkpoints_dir /home/junkaiwu/outputs/cssl_sound/moco_CL_2/2022-04-01+18-03-38_seed_2022+moco9256_shuffled_10_00_fold2/save --emb_norm_type sbn --experiment_name moco9256_shuffled_10_00_fold2_linclf --num_splits 4
-
-python linclf_train.py hparams/us8k/linclf_train_moco.yaml --output_base /home/junkaiwu/outputs/cssl_sound/moco_CL_2 --train_folds=[1,3,4,5,6,7,8,9,10] --valid_folds=[2] --test_folds=[2] --linclf_train_type seen --ssl_checkpoints_dir /home/junkaiwu/outputs/cssl_sound/moco_CL_2/2022-04-01+18-46-38_seed_2022+moco9256_shuffled_00_10_fold2/save --emb_norm_type sbn --experiment_name moco9256_shuffled_00_10_fold2_linclf --num_splits 4
-
-python supmoco_train.py hparams/us8k/supmoco_train.yaml --output_base /home/junkaiwu/outputs/cssl_sound/moco_CL_2  --train_folds=[1,2,3,5,6,7,8,9,10] --valid_folds=[4] --test_folds=[4] --replay_num_keep=0 --use_mixup False --ssl_weight=1.0 --sup_weight=0.0 --train_duration=2.0 --emb_norm_type sbn --proj_norm_type sbn --experiment_name moco9256_shuffled_10_00_fold4 --moco_momentum 0.9 --moco_temp 0.3 --moco_dict_size 256 --num_splits 4
-
-python supmoco_train.py hparams/us8k/supmoco_train.yaml --output_base /home/junkaiwu/outputs/cssl_sound/moco_CL_2  --train_folds=[1,2,3,5,6,7,8,9,10] --valid_folds=[4] --test_folds=[4] --replay_num_keep=0 --use_mixup False --ssl_weight=0.0 --sup_weight=1.0 --train_duration=2.0 --emb_norm_type sbn --proj_norm_type sbn --experiment_name moco9256_shuffled_00_10_fold4 --moco_momentum 0.9 --moco_temp 0.3 --moco_dict_size 256 --num_splits 4
-
-python supmoco_train.py hparams/us8k/supmoco_train.yaml --output_base /home/junkaiwu/outputs/cssl_sound/moco_CL_2  --train_folds=[1,2,3,4,5,7,8,9,10] --valid_folds=[6] --test_folds=[6] --replay_num_keep=0 --use_mixup False --ssl_weight=1.0 --sup_weight=0.0 --train_duration=2.0 --emb_norm_type sbn --proj_norm_type sbn --experiment_name moco9256_shuffled_10_00_fold6 --moco_momentum 0.9 --moco_temp 0.3 --moco_dict_size 256 --num_splits 4
-
-python supmoco_train.py hparams/us8k/supmoco_train.yaml --output_base /home/junkaiwu/outputs/cssl_sound/moco_CL_2  --train_folds=[1,2,3,4,5,7,8,9,10] --valid_folds=[6] --test_folds=[6] --replay_num_keep=0 --use_mixup False --ssl_weight=0.0 --sup_weight=1.0 --train_duration=2.0 --emb_norm_type sbn --proj_norm_type sbn --experiment_name moco9256_shuffled_00_10_fold6 --moco_momentum 0.9 --moco_temp 0.3 --moco_dict_size 256 --num_splits 4
-
-python linclf_train.py hparams/us8k/linclf_train_moco.yaml --output_base /home/junkaiwu/outputs/cssl_sound/moco_CL_2 --train_folds=[1,2,3,5,6,7,8,9,10] --valid_folds=[4] --test_folds=[4] --linclf_train_type seen --ssl_checkpoints_dir /home/junkaiwu/outputs/cssl_sound/moco_CL_2/2022-04-01+21-02-25_seed_2022+moco9256_shuffled_10_00_fold4/save --emb_norm_type sbn --experiment_name moco9256_shuffled_10_00_fold4_linclf --num_splits 4
-
-python linclf_train.py hparams/us8k/linclf_train_moco.yaml --output_base /home/junkaiwu/outputs/cssl_sound/moco_CL_2 --train_folds=[1,2,3,5,6,7,8,9,10] --valid_folds=[4] --test_folds=[4] --linclf_train_type seen --ssl_checkpoints_dir /home/junkaiwu/outputs/cssl_sound/moco_CL_2/2022-04-01+21-42-50_seed_2022+moco9256_shuffled_00_10_fold4/save --emb_norm_type sbn --experiment_name moco9256_shuffled_00_10_fold4_linclf --num_splits 4
-
-python linclf_train.py hparams/us8k/linclf_train_moco.yaml --output_base /home/junkaiwu/outputs/cssl_sound/moco_CL_2 --train_folds=[1,2,3,4,5,7,8,9,10] --valid_folds=[6] --test_folds=[6] --linclf_train_type seen --ssl_checkpoints_dir /home/junkaiwu/outputs/cssl_sound/moco_CL_2/2022-04-01+22-25-32_seed_2022+moco9256_shuffled_10_00_fold6/save --emb_norm_type sbn --experiment_name moco9256_shuffled_10_00_fold6_linclf --num_splits 4
-
-python linclf_train.py hparams/us8k/linclf_train_moco.yaml --output_base /home/junkaiwu/outputs/cssl_sound/moco_CL_2 --train_folds=[1,2,3,4,5,7,8,9,10] --valid_folds=[6] --test_folds=[6] --linclf_train_type seen --ssl_checkpoints_dir /home/junkaiwu/outputs/cssl_sound/moco_CL_2/2022-04-01+23-09-51_seed_2022+moco9256_shuffled_00_10_fold6/save --emb_norm_type sbn --experiment_name moco9256_shuffled_00_10_fold6_linclf --num_splits 4
-"""
 
 
 if __name__ == "__main__":
@@ -506,6 +460,17 @@ if __name__ == "__main__":
     )
 
     # csv files split by task
+    #  run_on_main(
+    #      prepare_split_urbansound8k_csv,
+    #      kwargs={
+    #          "root_dir": hparams["data_folder"],
+    #          'output_dir': hparams['save_folder'],
+    #          'task_classes': hparams['task_classes'],
+    #          'train_folds': hparams['train_folds'],
+    #          'valid_folds': hparams['valid_folds'],
+    #          'test_folds': hparams['test_folds'],
+    #      }
+    #  )
     run_on_main(
         hparams['prepare_split_csv_fn']
     )
@@ -532,6 +497,26 @@ if __name__ == "__main__":
                     hparams['lr_scheduler'] = hparams['lr_scheduler_fn']()
             hparams['recoverables']['epoch_counter'] = \
                     hparams['epoch_counter'] = hparams['epoch_counter_fn']()
+            if task_idx > 0:
+                hparams['recoverables']['prev_predictor'] = \
+                        hparams['modules']['prev_predictor'] = \
+                        hparams['prev_predictor'] = hparams['prev_predictor_fn']()
+                hparams['modules']['prev_embedding_model'] = \
+                        hparams['prev_embedding_model'] = hparams['prev_embedding_model_fn']()
+                prev_embedding_checkpointer = sb.utils.checkpoints.Checkpointer(
+                    hparams['prev_checkpointer'].checkpoints_dir,
+                    recoverables={
+                        'embedding_model': hparams['prev_embedding_model']
+                    },
+                )
+                prev_embedding_checkpointer.recover_if_possible()
+                #  hparams['modules']['prev_embedding_model'] = \
+                #          hparams['prev_embedding_model'] = copy.deepcopy(hparams['embedding_model'])
+                for p in hparams['prev_embedding_model'].parameters():
+                    p.requires_grad = False
+            else:
+                hparams['prev_predictor'] = None
+                hparams['prev_embedding_model'] = None
             # set new checkpointer
             hparams['checkpointer'] = sb.utils.checkpoints.Checkpointer(
                 os.path.join(hparams['save_folder'], 'task{}'.format(task_idx)),
@@ -547,6 +532,24 @@ if __name__ == "__main__":
                     hparams['lr_scheduler'] = hparams['lr_scheduler_fn']()
             hparams['recoverables']['epoch_counter'] = \
                     hparams['epoch_counter'] = hparams['epoch_counter_fn']()
+            if task_idx > 0:
+                hparams['recoverables']['prev_predictor'] = \
+                        hparams['modules']['prev_predictor'] = \
+                        hparams['prev_predictor'] = hparams['prev_predictor_fn']()
+                hparams['modules']['prev_embedding_model'] = \
+                        hparams['prev_embedding_model'] = hparams['prev_embedding_model_fn']()
+                prev_embedding_checkpointer = sb.utils.checkpoints.Checkpointer(
+                    hparams['prev_checkpointer'].checkpoints_dir,
+                    recoverables={
+                        'embedding_model': hparams['prev_embedding_model']
+                    },
+                )
+                prev_embedding_checkpointer.recover_if_possible()
+                for p in hparams['prev_embedding_model'].parameters():
+                    p.requires_grad = False
+            else:
+                hparams['prev_predictor'] = None
+                hparams['prev_embedding_model'] = None
             hparams['checkpointer'] = hparams['prev_checkpointer']
             hparams['checkpointer'].add_recoverables(hparams['recoverables'])
             # TODO: restore any external buffer for data generation here
@@ -567,7 +570,6 @@ if __name__ == "__main__":
             replay['train'],
             hparams['replay_num_keep'],
         )
-        replay['train'] += curr_train_replay
         if hparams['use_mixup']:
             train_data = mixup_dataio_ssl_prep(
                 hparams,
@@ -575,10 +577,17 @@ if __name__ == "__main__":
                 label_encoder,
             )
         else:
+            if hparams['dist_set'] is None:
+                dist_set = None
+            elif hparams['dist_set'] == 'buffer':
+                dist_set = replay['train']
+            else:
+                raise ValueError("dist set {} is not supported".format(hparams['dist_set']))
             train_data = dataio_ssl_prep(
                 hparams,
                 os.path.join(hparams['save_folder'], 'train_task{}_replay.csv'.format(task_idx)),
                 label_encoder,
+                dist_set,
             )
         # lr scheduler setups rely on task-wise dataloader
         if isinstance(hparams['lr_scheduler'], SimSiamCosineScheduler):
@@ -592,15 +601,13 @@ if __name__ == "__main__":
             print('==> Adjusting scheduler for {} steps at {}'.format(
                 steps_per_epoch, hparams['checkpointer'].checkpoints_dir))
 
-        brain = SupMOCO(
+        brain = SupBarlowTwins(
             modules=hparams["modules"],
             opt_class=hparams["opt_class"],
             hparams=hparams,
             run_opts=run_opts,
             checkpointer=hparams["checkpointer"],
         )
-
-        brain.init_moco(k=hparams["moco_dict_size"], m=hparams["moco_momentum"], t=hparams["moco_temp"])
 
         #  with torch.autograd.detect_anomaly():
         brain.fit(
@@ -615,6 +622,8 @@ if __name__ == "__main__":
 
         if num_tasks > 1:
             # global buffer
+            # update replay buffer
+            replay['train'] += curr_train_replay
             torch.save(
                 replay,
                 os.path.join(

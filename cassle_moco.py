@@ -131,7 +131,41 @@ class SupMOCO(sb.core.Brain):
 
         o = self.modules.classifier(h) # [B, 1, C]
 
-        return q.squeeze(1), k.squeeze(1), o, lens
+        # return q.squeeze(1), k.squeeze(1), o, lens
+    
+        if self.hparams.prev_embedding_model is not None:
+            self.modules.prev_embedding_model.eval()
+            if batch.dist_sig1[0] is not None:
+                dist_wavs1, dist_lens = batch.dist_sig1
+                dist_wavs2, _ = batch.dist_sig2
+                dist_x1 = self.prepare_features(dist_wavs1, dist_lens, stage)
+                dist_x2 = self.prepare_features(dist_wavs2, dist_lens, stage)
+                e1_prev = self.modules.prev_embedding_model(dist_x1)
+                e2_prev = self.modules.prev_embedding_model(dist_x2)
+                dist_e1 = self.modules.embedding_model(dist_x1)
+                dist_e2 = self.modules.embedding_model(dist_x2)
+                e1_hat = self.modules.prev_predictor(dist_e1)
+                e2_hat = self.modules.prev_predictor(dist_e2)
+            else:
+                e1_prev = self.modules.prev_embedding_model(x1)
+                # e2_prev = self.modules.prev_embedding_model(x2)
+                e1_hat = self.modules.prev_predictor(h)
+                # e2_hat = self.modules.prev_predictor(e2)
+            return {
+                'q': q.squeeze(1),
+                'k': k.squeeze(1),
+                'o': o,
+                'e1_hat': e1_hat,
+                'e1_prev': e1_prev.detach(),
+                'lens': lens,
+            }
+        else:
+            return {
+                'q': q.squeeze(1),
+                'k': k.squeeze(1),
+                'o': o,
+                'lens': lens,
+            }
 
     def prepare_features(self, wavs, lens, stage):
         # time domain augmentation
@@ -168,7 +202,10 @@ class SupMOCO(sb.core.Brain):
         return feats
 
     def compute_objectives(self, predictions, batch, stage):
-        q, k, o, lens = predictions
+        # q, k, o, lens = predictions
+        
+        q, k, o = predictions["q"], predictions["k"], predictions["o"]
+        lens = predictions["lens"]
 
         l_pos = torch.einsum('nc,nc->n', [q, k]).unsqueeze(-1)
         l_neg = torch.einsum('nc,ck->nk', [q, self.queue.clone().detach()])
@@ -188,13 +225,24 @@ class SupMOCO(sb.core.Brain):
         else:
             targets, _ = batch.class_string_encoded # [bs, 1]
             targets = F.one_hot(targets, o.shape[-1]).float()  # [bs, 1, C]
-
+            
         sup_loss = self.hparams.compute_sup_cost(o, targets, lens)
-        loss = self.hparams.sup_weight * sup_loss + self.hparams.ssl_weight * ssl_loss
+        
+        if self.hparams.prev_embedding_model is not None:
+            e1_hat = predictions['e1_hat']
+            e1_prev = predictions['e1_prev']
+            dist_loss_1 = self.hparams.compute_dist_cost(e1_hat.squeeze(1),
+                                                         e1_prev.squeeze(1))
+            dist_loss = dist_loss_1
+        else:
+            dist_loss = torch.zeros(1).to(ssl_loss.device)
+            
+        loss = self.hparams.sup_weight * sup_loss + self.hparams.ssl_weight * ssl_loss + self.hparams.dist_weight * dist_loss
 
         loss_dict = {
             'ssl': ssl_loss,
             'sup': sup_loss,
+            'dist': dist_loss,
         }
 
         if stage == sb.Stage.TRAIN and \
@@ -378,7 +426,7 @@ class SupMOCO(sb.core.Brain):
             )
 
 
-def dataio_ssl_prep(hparams, csv_path, label_encoder):
+def dataio_ssl_prep(hparams, csv_path, label_encoder, dist_list=None):
     "Creates the datasets and their data processing pipelines."
 
     config_sample_rate = hparams["sample_rate"]
@@ -392,13 +440,7 @@ def dataio_ssl_prep(hparams, csv_path, label_encoder):
         rstart = torch.randint(0, len(sig) - target_len + 1, (1,)).item()
         return sig[rstart:rstart+target_len]
 
-    # 2. Define audio pipeline:
-    @sb.utils.data_pipeline.takes("wav_path")
-    @sb.utils.data_pipeline.provides("sig1", "sig2")
-    def audio_pipeline(wav_path):
-        """Load the signal, and pass it and its length to the corruption class.
-        This is done on the CPU in the `collate_fn`."""
-
+    def read_sig(wav_path):
         sig, read_sr = torchaudio.load(wav_path)
 
         # If multi-channels, downmix it to a mono channel
@@ -415,12 +457,44 @@ def dataio_ssl_prep(hparams, csv_path, label_encoder):
                 )
             # Resample audio
             sig = hparams["resampler"].forward(sig)
-
         # scaling
         max_amp = torch.abs(sig).max().item()
         #  assert max_amp > 0
         scaling = 1 / max_amp * 0.9
         sig = scaling * sig
+        return sig
+
+    # 2. Define audio pipeline:
+    @sb.utils.data_pipeline.takes("wav_path")
+    @sb.utils.data_pipeline.provides("sig1", "sig2", "dist_sig1", "dist_sig2")
+    def audio_pipeline(wav_path):
+        """Load the signal, and pass it and its length to the corruption class.
+        This is done on the CPU in the `collate_fn`."""
+
+        #  sig, read_sr = torchaudio.load(wav_path)
+        #
+        #  # If multi-channels, downmix it to a mono channel
+        #  sig = torch.squeeze(sig)
+        #  if len(sig.shape) > 1:
+        #      sig = torch.mean(sig, dim=0)
+        #
+        #  # Convert sample rate to required config_sample_rate
+        #  if read_sr != config_sample_rate:
+        #      # Re-initialize sampler if source file sample rate changed compared to last file
+        #      if read_sr != hparams["resampler"].orig_freq:
+        #          hparams["resampler"] = torchaudio.transforms.Resample(
+        #              orig_freq=read_sr, new_freq=config_sample_rate
+        #          )
+        #      # Resample audio
+        #      sig = hparams["resampler"].forward(sig)
+        #
+        #  # scaling
+        #  max_amp = torch.abs(sig).max().item()
+        #  #  assert max_amp > 0
+        #  scaling = 1 / max_amp * 0.9
+        #  sig = scaling * sig
+
+        sig = read_sig(wav_path)
 
         target_len = int(hparams["train_duration"] * config_sample_rate)
         if len(sig) > target_len:
@@ -431,6 +505,21 @@ def dataio_ssl_prep(hparams, csv_path, label_encoder):
             sig2 = sig.clone()
         yield sig1
         yield sig2
+        # distillation dataset
+        if dist_list is None or len(dist_list) == 0:
+            yield None
+            yield None
+        else:
+            dist_dict = hparams['np_rng'].choice(dist_list, size=1)[0]
+            dist_sig = read_sig(dist_dict['wav_path'])
+            if len(dist_sig) > target_len:
+                dist_sig1 = random_segment(dist_sig, target_len)
+                dist_sig2 = random_segment(dist_sig, target_len)
+            else:
+                dist_sig1 = dist_sig
+                dist_sig2 = dist_sig.clone()
+            yield dist_sig1
+            yield dist_sig2
 
     # 3. Define label pipeline:
     @sb.utils.data_pipeline.takes("class_name")
@@ -445,7 +534,7 @@ def dataio_ssl_prep(hparams, csv_path, label_encoder):
     ds = sb.dataio.dataset.DynamicItemDataset.from_csv(
         csv_path=csv_path,
         dynamic_items=[audio_pipeline, label_pipeline],
-        output_keys=["id", "sig1", "sig2", "class_string_encoded"]
+        output_keys=["id", "sig1", "sig2", "dist_sig1", "dist_sig2", "class_string_encoded"]
     )
 
     return ds
@@ -532,6 +621,26 @@ if __name__ == "__main__":
                     hparams['lr_scheduler'] = hparams['lr_scheduler_fn']()
             hparams['recoverables']['epoch_counter'] = \
                     hparams['epoch_counter'] = hparams['epoch_counter_fn']()
+            if task_idx > 0:
+                hparams['recoverables']['prev_predictor'] = \
+                        hparams['modules']['prev_predictor'] = \
+                        hparams['prev_predictor'] = hparams['prev_predictor_fn']()
+                hparams['modules']['prev_embedding_model'] = \
+                        hparams['prev_embedding_model'] = hparams['prev_embedding_model_fn']()
+                prev_embedding_checkpointer = sb.utils.checkpoints.Checkpointer(
+                    hparams['prev_checkpointer'].checkpoints_dir,
+                    recoverables={
+                        'embedding_model': hparams['prev_embedding_model']
+                    },
+                )
+                prev_embedding_checkpointer.recover_if_possible()
+                #  hparams['modules']['prev_embedding_model'] = \
+                #          hparams['prev_embedding_model'] = copy.deepcopy(hparams['embedding_model'])
+                for p in hparams['prev_embedding_model'].parameters():
+                    p.requires_grad = False
+            else:
+                hparams['prev_predictor'] = None
+                hparams['prev_embedding_model'] = None
             # set new checkpointer
             hparams['checkpointer'] = sb.utils.checkpoints.Checkpointer(
                 os.path.join(hparams['save_folder'], 'task{}'.format(task_idx)),
@@ -547,6 +656,24 @@ if __name__ == "__main__":
                     hparams['lr_scheduler'] = hparams['lr_scheduler_fn']()
             hparams['recoverables']['epoch_counter'] = \
                     hparams['epoch_counter'] = hparams['epoch_counter_fn']()
+            if task_idx > 0:
+                hparams['recoverables']['prev_predictor'] = \
+                        hparams['modules']['prev_predictor'] = \
+                        hparams['prev_predictor'] = hparams['prev_predictor_fn']()
+                hparams['modules']['prev_embedding_model'] = \
+                        hparams['prev_embedding_model'] = hparams['prev_embedding_model_fn']()
+                prev_embedding_checkpointer = sb.utils.checkpoints.Checkpointer(
+                    hparams['prev_checkpointer'].checkpoints_dir,
+                    recoverables={
+                        'embedding_model': hparams['prev_embedding_model']
+                    },
+                )
+                prev_embedding_checkpointer.recover_if_possible()
+                for p in hparams['prev_embedding_model'].parameters():
+                    p.requires_grad = False
+            else:
+                hparams['prev_predictor'] = None
+                hparams['prev_embedding_model'] = None
             hparams['checkpointer'] = hparams['prev_checkpointer']
             hparams['checkpointer'].add_recoverables(hparams['recoverables'])
             # TODO: restore any external buffer for data generation here
@@ -567,7 +694,6 @@ if __name__ == "__main__":
             replay['train'],
             hparams['replay_num_keep'],
         )
-        replay['train'] += curr_train_replay
         if hparams['use_mixup']:
             train_data = mixup_dataio_ssl_prep(
                 hparams,
@@ -575,10 +701,17 @@ if __name__ == "__main__":
                 label_encoder,
             )
         else:
+            if hparams['dist_set'] is None:
+                dist_set = None
+            elif hparams['dist_set'] == 'buffer':
+                dist_set = replay['train']
+            else:
+                raise ValueError("dist set {} is not supported".format(hparams['dist_set']))
             train_data = dataio_ssl_prep(
                 hparams,
                 os.path.join(hparams['save_folder'], 'train_task{}_replay.csv'.format(task_idx)),
                 label_encoder,
+                dist_set,
             )
         # lr scheduler setups rely on task-wise dataloader
         if isinstance(hparams['lr_scheduler'], SimSiamCosineScheduler):
@@ -591,7 +724,7 @@ if __name__ == "__main__":
             hparams['checkpointer'].add_recoverables(hparams['recoverables'])
             print('==> Adjusting scheduler for {} steps at {}'.format(
                 steps_per_epoch, hparams['checkpointer'].checkpoints_dir))
-
+            
         brain = SupMOCO(
             modules=hparams["modules"],
             opt_class=hparams["opt_class"],
