@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Helper to create Confusion Matrix figure
+adapted from https://github.com/speechbrain/speechbrain/blob/develop/recipes/UrbanSound8k/SoundClassification/confusion_matrix_fig.py
 
 Authors
  * David Whipps 2021

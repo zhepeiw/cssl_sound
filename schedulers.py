@@ -4,6 +4,9 @@ import torch
 import numpy as np
 import pdb
 
+'''
+    partially adapted from https://github.com/PatrickHua/SimSiam/blob/main/optimizers/lr_scheduler.py
+'''
 
 @checkpoints.register_checkpoint_hooks
 class SimSiamCosineScheduler:
