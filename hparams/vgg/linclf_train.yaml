@@ -70,7 +70,7 @@ valid_dataloader_opts:
 
 
 # Experiment params
-auto_mix_prec: True # Set it to True for mixed precision
+auto_mix_prec: False # Set it to True for mixed precision
 
 
 # Feature parameters
